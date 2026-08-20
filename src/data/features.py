@@ -94,26 +94,33 @@ def add_hourly_txn_count(df: pd.DataFrame) -> pd.DataFrame:
 # ── Frequency / count encodings ──────────────────────────────────────────────
 
 def add_frequency_encodings(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
-    df = df.copy()
+    df = df.copy().sort_values("TransactionDT").reset_index(drop=True)
+
     for col in cols:
         if col in df.columns:
-            freq = df[col].value_counts(dropna=False)
-            df[f"{col}_freq"] = df[col].map(freq).fillna(0).astype(int)
+            # Historical frequency only — never use future transactions
+            df[f"{col}_freq"] = (
+                df.groupby(col).cumcount()
+            )
+
     return df
 
 
 def add_combination_feature(df: pd.DataFrame) -> pd.DataFrame:
-    """card1 + addr1 pair — captures card-issuer / billing-zip combinations."""
-    df = df.copy()
+    df = df.copy().sort_values("TransactionDT").reset_index(drop=True)
+
     if "card1" not in df.columns or "addr1" not in df.columns:
         df["card1_addr1_freq"] = 0
         return df
-    df["card1_addr1"] = (
-        df["card1"].astype(str) + "_" + df["addr1"].fillna("nan").astype(str)
+
+    key = (
+        df["card1"].astype(str)
+        + "_"
+        + df["addr1"].fillna("nan").astype(str)
     )
-    freq = df["card1_addr1"].value_counts(dropna=False)
-    df["card1_addr1_freq"] = df["card1_addr1"].map(freq).fillna(0).astype(int)
-    df = df.drop(columns=["card1_addr1"])
+
+    df["card1_addr1_freq"] = key.groupby(key).cumcount()
+
     return df
 
 
