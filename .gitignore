@@ -1,0 +1,16 @@
+data/raw/*.csv
+data/raw/*.zip
+
+models/checkpoints/*
+models/optuna/*
+models/stacking/*
+
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+.env
+
+.ipynb_checkpoints/
+.DS_Store
