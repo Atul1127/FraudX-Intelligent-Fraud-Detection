@@ -1,11 +1,9 @@
 from pathlib import Path
 
 import joblib
-import numpy as np
-import pandas as pd
-from catboost import CatBoostClassifier
-from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
 
 
 class FraudEnsemble:
