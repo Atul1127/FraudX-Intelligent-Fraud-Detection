@@ -85,6 +85,14 @@ class FraudEnsemble:
             0.30 * cat
         )
 
+    def predict_individual(self, X):
+        return {
+            "XGBoost": self.xgb_model.predict_proba(X)[:, 1],
+            "LightGBM": self.lgb_model.predict_proba(X)[:, 1],
+            "CatBoost": self.cat_model.predict_proba(X)[:, 1],
+            "Ensemble": self.predict_proba(X),
+        }
+
     def save(self, checkpoint_dir: str | Path):
         checkpoint_dir = Path(checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
