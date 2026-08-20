@@ -25,8 +25,34 @@ class Trainer:
         self.model.fit(X_train, y_train, X_val, y_val)
 
         print("\nEvaluating on validation set...")
-        proba = self.model.predict_proba(X_val)
-        best_threshold, best_f1 = find_best_threshold(y_val.values, proba)
+                predictions = self.model.predict_individual(X_val)
+
+        print("\nModel Comparison:")
+        comparison = {}
+
+        for name, model_proba in predictions.items():
+            threshold, _ = find_best_threshold(
+                y_val.values, model_proba
+            )
+            model_metrics = compute_metrics(
+                y_val.values,
+                model_proba,
+                threshold=threshold
+            )
+
+            comparison[name] = model_metrics
+
+            print(
+                f"{name:10s} | "
+                f"AUC-ROC: {model_metrics['auc_roc']:.4f} | "
+                f"AUC-PR: {model_metrics['auc_pr']:.4f} | "
+                f"F1: {model_metrics['f1']:.4f}"
+            )
+
+        proba = predictions["Ensemble"]
+        best_threshold, best_f1 = find_best_threshold(
+            y_val.values, proba
+        )
         metrics = compute_metrics(y_val.values, proba, threshold=best_threshold)
 
         print(f"  AUC-ROC:   {metrics['auc_roc']:.4f}")
