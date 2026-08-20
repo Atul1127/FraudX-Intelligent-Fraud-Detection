@@ -22,64 +22,59 @@ class Trainer:
         y_val: pd.Series,
     ) -> dict:
 
-        self.model.fit(
-            X_train,
-            y_train,
-            X_val,
-            y_val,
-        )
+        self.model.fit(X_train, y_train, X_val, y_val)
 
-        print("\nEvaluating models on validation set...")
+        print("\nEvaluating on validation set...")
 
         predictions = self.model.predict_individual(X_val)
 
+        print("\nModel Comparison:")
         comparison = {}
 
         for name, model_proba in predictions.items():
-            threshold, best_f1 = find_best_threshold(
+            threshold, _ = find_best_threshold(
                 y_val.values,
                 model_proba,
             )
 
-            metrics = compute_metrics(
+            model_metrics = compute_metrics(
                 y_val.values,
                 model_proba,
                 threshold=threshold,
             )
 
-            comparison[name] = {
-                **metrics,
-                "best_threshold": float(threshold),
-                "best_f1": float(best_f1),
-            }
+            comparison[name] = model_metrics
 
             print(
                 f"{name:10s} | "
-                f"AUC-ROC: {metrics['auc_roc']:.4f} | "
-                f"AUC-PR: {metrics['auc_pr']:.4f} | "
-                f"F1: {metrics['f1']:.4f}"
+                f"AUC-ROC: {model_metrics['auc_roc']:.4f} | "
+                f"AUC-PR: {model_metrics['auc_pr']:.4f} | "
+                f"F1: {model_metrics['f1']:.4f}"
             )
 
-        ensemble_proba = self.model.predict_proba(X_val)
+        proba = predictions["Ensemble"]
 
         best_threshold, best_f1 = find_best_threshold(
             y_val.values,
-            ensemble_proba,
+            proba,
         )
 
         metrics = compute_metrics(
             y_val.values,
-            ensemble_proba,
+            proba,
             threshold=best_threshold,
         )
 
         print("\nFinal Ensemble:")
-        print(f"  AUC-ROC:       {metrics['auc_roc']:.4f}")
-        print(f"  AUC-PR:        {metrics['auc_pr']:.4f}")
-        print(f"  Best threshold: {best_threshold:.3f}")
-        print(f"  Precision:     {metrics['precision']:.4f}")
-        print(f"  Recall:        {metrics['recall']:.4f}")
-        print(f"  F1:            {metrics['f1']:.4f}")
+        print(f"  AUC-ROC: {metrics['auc_roc']:.4f}")
+        print(f"  AUC-PR: {metrics['auc_pr']:.4f}")
+        print(
+            f"  Best threshold: {best_threshold:.3f}"
+            f"  (F1={best_f1:.4f})"
+        )
+        print(f"  Precision: {metrics['precision']:.4f}")
+        print(f"  Recall: {metrics['recall']:.4f}")
+        print(f"  F1: {metrics['f1']:.4f}")
 
         self.cfg["ensemble"]["default_threshold"] = float(
             best_threshold
