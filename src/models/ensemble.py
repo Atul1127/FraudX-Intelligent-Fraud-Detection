@@ -1,6 +1,7 @@
 from pathlib import Path
-
+import json
 import joblib
+
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
@@ -11,40 +12,40 @@ class FraudEnsemble:
         self.cfg = cfg
         self.feature_names = None
 
+        tuned_path = Path("models/optuna/best_params.json")
+
+        tuned = {}
+
+        if tuned_path.exists():
+            with open(tuned_path, "r") as f:
+                tuned = json.load(f)
+
         xgb_cfg = cfg["xgboost"]
         lgb_cfg = cfg["lightgbm"]
 
+        xgb_params = tuned.get("XGBoost", {}).get("params", {})
+        lgb_params = tuned.get("LightGBM", {}).get("params", {})
+        cat_params = tuned.get("CatBoost", {}).get("params", {})
+
         self.xgb_model = XGBClassifier(
-            n_estimators=xgb_cfg["n_estimators"],
-            max_depth=xgb_cfg["max_depth"],
-            learning_rate=xgb_cfg["learning_rate"],
-            subsample=xgb_cfg["subsample"],
-            colsample_bytree=xgb_cfg["colsample_bytree"],
-            scale_pos_weight=xgb_cfg["scale_pos_weight"],
+            **xgb_params,
             eval_metric=xgb_cfg["eval_metric"],
             tree_method=xgb_cfg["tree_method"],
             random_state=cfg["data"]["random_seed"],
         )
 
         self.lgb_model = LGBMClassifier(
-            n_estimators=lgb_cfg["n_estimators"],
-            max_depth=lgb_cfg["max_depth"],
-            num_leaves=lgb_cfg["num_leaves"],
-            learning_rate=lgb_cfg["learning_rate"],
-            subsample=lgb_cfg["subsample"],
-            colsample_bytree=lgb_cfg["colsample_bytree"],
-            is_unbalance=lgb_cfg["is_unbalance"],
+            **lgb_params,
+            is_unbalance=True,
             verbose=-1,
             random_state=cfg["data"]["random_seed"],
         )
 
         self.cat_model = CatBoostClassifier(
-            iterations=500,
-            depth=7,
-            learning_rate=0.05,
+            **cat_params,
+            auto_class_weights="Balanced",
             loss_function="Logloss",
             eval_metric="AUC",
-            auto_class_weights="Balanced",
             random_seed=cfg["data"]["random_seed"],
             verbose=False,
         )
@@ -69,7 +70,6 @@ class FraudEnsemble:
             X_train,
             y_train,
             eval_set=(X_val, y_val),
-            early_stopping_rounds=50,
             verbose=False,
         )
 
