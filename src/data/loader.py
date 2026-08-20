@@ -27,16 +27,25 @@ def load_test_raw(cfg: dict) -> pd.DataFrame:
 def train_val_split(
     df: pd.DataFrame, cfg: dict
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+
     target = cfg["features"]["target_col"]
-    X = df.drop(columns=[target])
-    y = df[target]
-    X_train, X_val, y_train, y_val = train_test_split(
-        X,
-        y,
-        test_size=cfg["data"]["test_size"],
-        random_state=cfg["data"]["random_seed"],
-        stratify=y,
-    )
+
+    # Fraud detection should be evaluated chronologically.
+    # Earlier transactions → training
+    # Later transactions → validation
+    df = df.sort_values("TransactionDT").reset_index(drop=True)
+
+    split_idx = int(len(df) * (1 - cfg["data"]["test_size"]))
+
+    train_df = df.iloc[:split_idx]
+    val_df = df.iloc[split_idx:]
+
+    X_train = train_df.drop(columns=[target])
+    y_train = train_df[target]
+
+    X_val = val_df.drop(columns=[target])
+    y_val = val_df[target]
+
     return X_train, X_val, y_train, y_val
 
 
