@@ -1,0 +1,47 @@
+data:
+  processed_dir: data/processed
+  random_seed: 42
+  raw_dir: data/raw
+  test_size: 0.2
+ensemble:
+  default_threshold: 0.4259135130282319
+  lgbm_weight: 0.5
+  xgb_weight: 0.5
+features:
+  freq_encode_cols:
+  - card1
+  - card2
+  - addr1
+  - P_emaildomain
+  - R_emaildomain
+  - DeviceType
+  - DeviceInfo
+  target_col: isFraud
+  time_windows:
+  - 3600
+  - 86400
+  - 604800
+lightgbm:
+  colsample_bytree: 0.8
+  early_stopping_rounds: 50
+  is_unbalance: true
+  learning_rate: 0.05
+  max_depth: 8
+  metric: auc
+  n_estimators: 500
+  num_leaves: 63
+  subsample: 0.8
+  verbose: -1
+smote:
+  k_neighbors: 5
+  sampling_strategy: 0.1
+xgboost:
+  colsample_bytree: 0.8
+  early_stopping_rounds: 50
+  eval_metric: auc
+  learning_rate: 0.05
+  max_depth: 6
+  n_estimators: 500
+  scale_pos_weight: 9
+  subsample: 0.8
+  tree_method: hist
