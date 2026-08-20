@@ -1,23 +1,41 @@
 from __future__ import annotations
 
-import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import shap
-import matplotlib
-import matplotlib.pyplot as plt
-
-matplotlib.use("Agg")
 
 
 def build_explainers(model, X_background: pd.DataFrame) -> dict:
-    """Build SHAP TreeExplainers for both sub-models."""
-    X_bg = X_background.fillna(X_background.median(numeric_only=True))
+    X_bg = X_background.fillna(
+        X_background.median(numeric_only=True)
+    )
+
     return {
-        "xgb": shap.TreeExplainer(model.xgb_model, X_bg),
-        "lgbm": shap.TreeExplainer(model.lgbm_model, X_bg),
-        "xgb_weight": model.xgb_weight,
-        "lgbm_weight": model.lgbm_weight,
+        "xgb": shap.TreeExplainer(
+            model.xgb_model,
+            X_bg,
+        ),
+        "lgbm": shap.TreeExplainer(
+            model.lgb_model,
+            X_bg,
+        ),
+        "cat": shap.TreeExplainer(
+            model.cat_model,
+            X_bg,
+        ),
     }
+
+
+def _get_shap_values(explainer, X):
+    values = explainer.shap_values(X)
+
+    if isinstance(values, list):
+        values = values[1]
+
+    return values
 
 
 def explain_transaction(
@@ -25,44 +43,78 @@ def explain_transaction(
     explainers: dict,
     feature_names: list[str],
 ) -> shap.Explanation:
-    """Return a weighted-average SHAP Explanation for a single row."""
-    row_filled = row.fillna(row.median(numeric_only=True))
 
-    sv_xgb = explainers["xgb"].shap_values(row_filled)
-    sv_lgbm = explainers["lgbm"].shap_values(row_filled)
-
-    # LightGBM returns list[array] for binary; XGBoost returns array
-    if isinstance(sv_lgbm, list):
-        sv_lgbm = sv_lgbm[1]
-    if isinstance(sv_xgb, list):
-        sv_xgb = sv_xgb[1]
-
-    total = explainers["xgb_weight"] + explainers["lgbm_weight"]
-    sv_combined = (
-        explainers["xgb_weight"] * sv_xgb + explainers["lgbm_weight"] * sv_lgbm
-    ) / total
-
-    base_xgb = float(explainers["xgb"].expected_value)
-    base_lgbm = float(
-        explainers["lgbm"].expected_value[1]
-        if hasattr(explainers["lgbm"].expected_value, "__len__")
-        else explainers["lgbm"].expected_value
+    row_filled = row.fillna(
+        row.median(numeric_only=True)
     )
-    base = (explainers["xgb_weight"] * base_xgb + explainers["lgbm_weight"] * base_lgbm) / total
+
+    sv_xgb = _get_shap_values(
+        explainers["xgb"],
+        row_filled,
+    )
+
+    sv_lgbm = _get_shap_values(
+        explainers["lgbm"],
+        row_filled,
+    )
+
+    sv_cat = _get_shap_values(
+        explainers["cat"],
+        row_filled,
+    )
+
+    combined = (
+        0.35 * sv_xgb
+        + 0.35 * sv_lgbm
+        + 0.30 * sv_cat
+    )
+
+    base_xgb = float(
+        explainers["xgb"].expected_value
+    )
+
+    base_lgbm = explainers["lgbm"].expected_value
+
+    if hasattr(base_lgbm, "__len__"):
+        base_lgbm = float(base_lgbm[1])
+    else:
+        base_lgbm = float(base_lgbm)
+
+    base_cat = explainers["cat"].expected_value
+
+    if hasattr(base_cat, "__len__"):
+        base_cat = float(base_cat[1])
+    else:
+        base_cat = float(base_cat)
+
+    base = (
+        0.35 * base_xgb
+        + 0.35 * base_lgbm
+        + 0.30 * base_cat
+    )
 
     return shap.Explanation(
-        values=sv_combined[0],
+        values=combined[0],
         base_values=base,
         data=row_filled.values[0],
         feature_names=feature_names,
     )
 
 
-def plot_waterfall(explanation: shap.Explanation, max_display: int = 15) -> plt.Figure:
-    fig, ax = plt.subplots(figsize=(10, 6))
-    shap.plots.waterfall(explanation, max_display=max_display, show=False)
+def plot_waterfall(
+    explanation: shap.Explanation,
+    max_display: int = 15,
+) -> plt.Figure:
+
+    shap.plots.waterfall(
+        explanation,
+        max_display=max_display,
+        show=False,
+    )
+
     fig = plt.gcf()
     plt.tight_layout()
+
     return fig
 
 
@@ -73,28 +125,41 @@ def plot_summary(
     max_display: int = 20,
     plot_type: str = "bar",
 ) -> plt.Figure:
-    X_filled = X.fillna(X.median(numeric_only=True))
-    sv_xgb = explainers["xgb"].shap_values(X_filled)
-    sv_lgbm = explainers["lgbm"].shap_values(X_filled)
 
-    if isinstance(sv_lgbm, list):
-        sv_lgbm = sv_lgbm[1]
-    if isinstance(sv_xgb, list):
-        sv_xgb = sv_xgb[1]
+    X_filled = X.fillna(
+        X.median(numeric_only=True)
+    )
 
-    total = explainers["xgb_weight"] + explainers["lgbm_weight"]
-    sv_combined = (
-        explainers["xgb_weight"] * sv_xgb + explainers["lgbm_weight"] * sv_lgbm
-    ) / total
+    sv_xgb = _get_shap_values(
+        explainers["xgb"],
+        X_filled,
+    )
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    sv_lgbm = _get_shap_values(
+        explainers["lgbm"],
+        X_filled,
+    )
+
+    sv_cat = _get_shap_values(
+        explainers["cat"],
+        X_filled,
+    )
+
+    combined = (
+        0.35 * sv_xgb
+        + 0.35 * sv_lgbm
+        + 0.30 * sv_cat
+    )
+
     shap.summary_plot(
-        sv_combined,
+        combined,
         X_filled,
         plot_type=plot_type,
         max_display=max_display,
         show=False,
     )
+
     fig = plt.gcf()
     plt.tight_layout()
+
     return fig
