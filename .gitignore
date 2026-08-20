@@ -1,16 +1,15 @@
-data/raw/*.csv
-data/raw/*.zip
+# Dataset
+data/raw/
+data/processed/
 
-models/checkpoints/*
-models/optuna/*
-models/stacking/*
+# Generated models
+models/checkpoints/
+models/optuna/
+models/stacking/
 
+# CatBoost
+catboost_info/
+
+# Python
 __pycache__/
 *.py[cod]
-
-.venv/
-venv/
-.env
-
-.ipynb_checkpoints/
-.DS_Store
