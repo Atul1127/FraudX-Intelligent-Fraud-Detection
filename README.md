@@ -362,18 +362,3 @@ The project demonstrates:
 * Temporal validation
 * Model interpretability
 * Threshold optimization
-
-````
-
-Commit it on GitHub as:
-
-```text
-Rewrite README for FraudX ML pipeline
-````
-
-Then in Bash:
-
-```bash
-cd ~/FraudX-Intelligent-Fraud-Detection
-git pull origin main
-```
