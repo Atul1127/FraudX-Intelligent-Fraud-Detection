@@ -1,47 +1,122 @@
 data:
-  processed_dir: data/processed
-  random_seed: 42
-  raw_dir: data/raw
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  model_dir: "models"
+  train_file: "train_transaction.csv"
+  test_file: "test_transaction.csv"
   test_size: 0.2
+  random_state: 42
+
+features:
+  target_col: "isFraud"
+  id_col: "TransactionID"
+
+  transaction:
+    amount_log: true
+    amount_bins: true
+    time_features: true
+
+  card:
+    enabled: true
+    combinations: true
+
+  address:
+    enabled: true
+    combinations: true
+
+  email:
+    enabled: true
+    combinations: true
+
+  identity:
+    enabled: true
+    combinations: true
+
+  velocity:
+    enabled: true
+    windows:
+      - 3600
+      - 86400
+      - 604800
+
+  frequency:
+    enabled: true
+    columns:
+      - "card1"
+      - "card2"
+      - "card3"
+      - "card5"
+      - "addr1"
+      - "addr2"
+      - "P_emaildomain"
+      - "R_emaildomain"
+
+preprocessing:
+  missing_value_strategy: "median"
+  categorical_encoding: "frequency"
+  scale_numeric: false
+
+smote:
+  enabled: true
+  sampling_strategy: 0.3
+  random_state: 42
+
+models:
+  xgboost:
+    enabled: true
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.8
+    scale_pos_weight: 9
+    random_state: 42
+    eval_metric: "aucpr"
+
+  lightgbm:
+    enabled: true
+    n_estimators: 500
+    max_depth: -1
+    learning_rate: 0.05
+    num_leaves: 31
+    subsample: 0.8
+    colsample_bytree: 0.8
+    is_unbalance: true
+    random_state: 42
+    metric: "average_precision"
+
+  catboost:
+    enabled: true
+    iterations: 500
+    depth: 6
+    learning_rate: 0.05
+    auto_class_weights: "Balanced"
+    random_seed: 42
+    eval_metric: "AUC"
+
 ensemble:
   default_threshold: 0.34561272049284264
-  lgbm_weight: 0.5
-  xgb_weight: 0.5
-features:
-  freq_encode_cols:
-  - card1
-  - card2
-  - addr1
-  - P_emaildomain
-  - R_emaildomain
-  - DeviceType
-  - DeviceInfo
-  target_col: isFraud
-  time_windows:
-  - 3600
-  - 86400
-  - 604800
-lightgbm:
-  colsample_bytree: 0.8
+
+evaluation:
+  primary_metric: "pr_auc"
+  secondary_metrics:
+    - "roc_auc"
+    - "precision"
+    - "recall"
+    - "f1"
+
+  optimize_threshold: true
+
+explainability:
+  enabled: true
+  shap_samples: 500
+
+training:
   early_stopping_rounds: 50
-  is_unbalance: true
-  learning_rate: 0.05
-  max_depth: 8
-  metric: auc
-  n_estimators: 500
-  num_leaves: 63
-  subsample: 0.8
-  verbose: -1
-smote:
-  k_neighbors: 5
-  sampling_strategy: 0.1
-xgboost:
-  colsample_bytree: 0.8
-  early_stopping_rounds: 50
-  eval_metric: auc
-  learning_rate: 0.05
-  max_depth: 6
-  n_estimators: 500
-  scale_pos_weight: 9
-  subsample: 0.8
-  tree_method: hist
+  verbose: true
+
+optuna:
+  enabled: true
+  n_trials: 5
+  direction: "maximize"
+  metric: "pr_auc"
