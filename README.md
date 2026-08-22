@@ -1,6 +1,6 @@
 # FraudX — Intelligent Fraud Detection
 
-FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud Detection dataset. It combines **time-aware validation, causal feature engineering, class-imbalance handling, gradient-boosting ensembles, Optuna tuning, threshold optimization, SHAP explanations, and a Streamlit dashboard**.
+FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud Detection dataset. It combines **time-aware validation, leakage-conscious feature engineering, class-imbalance handling, gradient-boosting ensembles, Optuna tuning, threshold optimization, SHAP explanations, automated tests, and a Streamlit dashboard**.
 
 ## Results
 
@@ -93,7 +93,13 @@ FraudX-Intelligent-Fraud-Detection/
 │   ├── tune.py
 │   ├── stacking.py
 │   └── benchmark_random.py
+├── tests/
+│   ├── test_features.py
+│   ├── test_loader.py
+│   ├── test_evaluate.py
+│   └── test_ensemble.py
 ├── config.yaml
+├── pytest.ini
 ├── requirements.txt
 ├── train.py
 └── README.md
@@ -155,7 +161,15 @@ python -m src.benchmark_random
 
 This is a comparison benchmark only; temporal validation remains the primary evaluation protocol.
 
-### 7. Launch the dashboard
+### 7. Run tests
+
+```bash
+pytest -q
+```
+
+The test suite covers chronological splitting, historical feature behavior, numeric feature output, evaluation metrics, threshold selection, and the ensemble prediction contract.
+
+### 8. Launch the dashboard
 
 ```bash
 streamlit run app/streamlit_app.py
@@ -215,6 +229,22 @@ This keeps the experimental result separate from the default weighted ensemble s
 
 SHAP is used for model interpretation, including global feature importance, per-transaction explanations, waterfall plots, and feature contribution analysis.
 
+## Testing
+
+The repository includes lightweight unit tests designed to catch common ML pipeline regressions:
+
+- Temporal ordering and train/validation separation
+- Historical frequency and transaction-time features
+- Numeric feature output after preprocessing
+- Evaluation metric and threshold contracts
+- Ensemble probability shape and bounds
+
+Run the suite with:
+
+```bash
+pytest -q
+```
+
 ## Why Temporal Validation?
 
 Fraud behavior changes over time. A random split can place highly related transactions from the same period on both sides of the split and produce optimistic estimates.
@@ -242,8 +272,8 @@ The Streamlit application provides:
 
 ## Technology Stack
 
-Python · Pandas · NumPy · Scikit-learn · XGBoost · LightGBM · CatBoost · Optuna · SHAP · imbalanced-learn · Streamlit
+Python · Pandas · NumPy · Scikit-learn · XGBoost · LightGBM · CatBoost · Optuna · SHAP · imbalanced-learn · Streamlit · Pytest
 
 ## Project Goal
 
-FraudX focuses on building a realistic and interpretable fraud-detection workflow rather than optimizing a single benchmark number. It demonstrates **time-aware ML validation, leakage-conscious feature engineering, imbalanced classification, ensemble learning, hyperparameter optimization, threshold selection, stacking, explainability, and model serving through an interactive dashboard**.
+FraudX focuses on building a realistic and interpretable fraud-detection workflow rather than optimizing a single benchmark number. It demonstrates **time-aware ML validation, leakage-conscious feature engineering, imbalanced classification, ensemble learning, hyperparameter optimization, threshold selection, stacking, explainability, testing, and model serving through an interactive dashboard**.
