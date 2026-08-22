@@ -74,7 +74,6 @@ class FraudEnsemble:
     def fit(self, X_train, y_train, X_val, y_val):
         self.feature_names = list(X_train.columns)
         self.xgb_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
-        # LightGBM 4.x deprecates eval_set in favor of eval_X/eval_y.
         self.lgb_model.fit(X_train, y_train, eval_X=X_val, eval_y=y_val)
         self.cat_model.fit(X_train, y_train, eval_set=(X_val, y_val), verbose=False)
         return self
@@ -100,3 +99,15 @@ class FraudEnsemble:
         joblib.dump(self.lgb_model, checkpoint_dir / "lgb_model.joblib")
         joblib.dump(self.cat_model, checkpoint_dir / "cat_model.joblib")
         joblib.dump(self.feature_names, checkpoint_dir / "feature_names.joblib")
+
+    @classmethod
+    def load(cls, checkpoint_dir: str | Path, cfg: dict) -> "FraudEnsemble":
+        """Load a trained ensemble without rebuilding model hyperparameters."""
+        checkpoint_dir = Path(checkpoint_dir)
+        model = cls.__new__(cls)
+        model.cfg = cfg
+        model.feature_names = joblib.load(checkpoint_dir / "feature_names.joblib")
+        model.xgb_model = joblib.load(checkpoint_dir / "xgb_model.joblib")
+        model.lgb_model = joblib.load(checkpoint_dir / "lgb_model.joblib")
+        model.cat_model = joblib.load(checkpoint_dir / "cat_model.joblib")
+        return model
