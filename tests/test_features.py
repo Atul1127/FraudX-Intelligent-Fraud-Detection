@@ -36,7 +36,7 @@ def test_time_since_last_transaction_is_chronological():
     assert result["time_since_last_txn"].tolist() == [0, 10, 10]
 
 
-def test_hourly_count_is_available_without_future_lookup():
+def test_hourly_count_excludes_current_and_future_rows():
     df = pd.DataFrame(
         {
             "TransactionID": [1, 2, 3],
@@ -48,7 +48,8 @@ def test_hourly_count_is_available_without_future_lookup():
 
     result = add_hourly_txn_count(df)
 
-    assert result["card1_hour_count"].tolist() == [1, 1, 1]
+    # Each row is the first transaction for its card/hour combination.
+    assert result["card1_hour_count"].tolist() == [0, 0, 0]
 
 
 def test_build_features_returns_numeric_columns():
