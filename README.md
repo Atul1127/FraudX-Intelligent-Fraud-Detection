@@ -1,32 +1,25 @@
 # FraudX — Intelligent Fraud Detection
 
-An end-to-end, interpretable fraud detection system built on the IEEE-CIS Fraud Detection dataset. FraudX combines leakage-aware feature engineering, chronological validation, class-imbalance handling, gradient-boosting ensembles, hyperparameter optimization, stacking, threshold tuning, and SHAP explainability.
-
-## Highlights
-
-- Chronological train/validation split for realistic future-transaction evaluation
-- Leakage-aware transaction, identity, frequency, velocity, and temporal features
-- SMOTE applied only to training data
-- XGBoost, LightGBM, and CatBoost base learners
-- Weighted soft-voting ensemble and Logistic Regression stacking
-- Optuna optimization targeting PR-AUC
-- Threshold optimization for fraud-focused precision/recall trade-offs
-- SHAP-based global and per-transaction explanations
-- Streamlit dashboard for scoring, evaluation, and threshold analysis
+FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud Detection dataset. It combines **time-aware validation, causal feature engineering, class-imbalance handling, gradient-boosting ensembles, Optuna tuning, threshold optimization, SHAP explanations, and a Streamlit dashboard**.
 
 ## Results
 
-### Temporal Validation
+### Main temporal evaluation
+
+The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation.
 
 | Model | ROC-AUC | PR-AUC | F1 |
 |---|---:|---:|---:|
 | XGBoost | 0.8750 | 0.3604 | 0.3958 |
 | LightGBM | 0.8780 | 0.4482 | 0.4618 |
 | CatBoost | 0.8807 | 0.4612 | 0.4753 |
-| Weighted Ensemble | 0.9011 | 0.4946 | 0.4980 |
-| **Stacked Ensemble** | **0.9199** | **0.5504** | 0.4834 |
+| **Weighted Ensemble** | **0.9011** | **0.4946** | **0.4980** |
 
-### Random Validation Benchmark
+### Stacking experiment
+
+A separate chronological stacking experiment achieved **0.9199 ROC-AUC** and **0.5504 PR-AUC**. Stacking is kept as an explicit experiment rather than silently replacing the default weighted ensemble used by the training pipeline and dashboard.
+
+### Random-split benchmark
 
 | Model | ROC-AUC | PR-AUC | F1 |
 |---|---:|---:|---:|
@@ -35,44 +28,47 @@ An end-to-end, interpretable fraud detection system built on the IEEE-CIS Fraud 
 | CatBoost | 0.9561 | 0.7212 | 0.6856 |
 | **Weighted Ensemble** | **0.9610** | **0.7717** | **0.7290** |
 
-The gap between random and temporal validation demonstrates why chronological evaluation is important for fraud detection: random splits can produce substantially more optimistic estimates when transaction patterns are time-dependent.
+The gap between random and temporal validation demonstrates why future-transaction validation is the primary evaluation protocol.
 
 ## Architecture
 
 ```text
-IEEE-CIS Transactions + Identity Data
-                │
-                ▼
-        Data Loading & Merge
-                │
-                ▼
-     Leakage-Aware Feature Engineering
-                │
-                ▼
-      Chronological Train / Validation
-                │
-                ▼
-        SMOTE on Training Only
-                │
-       ┌────────┼─────────┐
-       ▼        ▼         ▼
-   XGBoost   LightGBM   CatBoost
-       └────────┼─────────┘
-                ▼
-        Weighted Ensemble
-                │
-                ▼
-       Stacking Meta-Model
-                │
-                ▼
-       Threshold Optimization
-                │
-                ▼
-        Fraud Probability
-                │
-          ┌─────┴─────┐
-          ▼           ▼
-      SHAP API     Streamlit UI
+IEEE-CIS Transactions + Identity
+              │
+              ▼
+        Data Loading / Merge
+              │
+              ▼
+     Time-Ordered Feature Engineering
+              │
+              ├── Time / amount features
+              ├── Historical frequency features
+              ├── Card / address / email signals
+              ├── Transaction velocity
+              └── Vesta / match features
+              │
+              ▼
+     Chronological Train / Validation Split
+              │
+              ▼
+       SMOTE on Training Data
+              │
+       ┌──────┼────────┐
+       ▼      ▼        ▼
+    XGBoost LightGBM CatBoost
+       └──────┼────────┘
+              ▼
+       Weighted Ensemble
+              │
+              ▼
+      Threshold Optimization
+              │
+              ▼
+       Fraud Probability
+              │
+       ┌──────┴──────┐
+       ▼             ▼
+   SHAP Explain    Dashboard
 ```
 
 ## Project Structure
@@ -103,7 +99,7 @@ FraudX-Intelligent-Fraud-Detection/
 └── README.md
 ```
 
-Generated datasets, cached features, model checkpoints, tuning outputs, and stacking artifacts are intentionally excluded from version control.
+Generated datasets and model artifacts are intentionally excluded from Git.
 
 ## Setup
 
@@ -113,15 +109,9 @@ Generated datasets, cached features, model checkpoints, tuning outputs, and stac
 pip install -r requirements.txt
 ```
 
-### 2. Download the dataset
+### 2. Download IEEE-CIS data
 
-FraudX uses the [IEEE-CIS Fraud Detection](https://www.kaggle.com/competitions/ieee-fraud-detection) dataset. Accept the competition rules before downloading.
-
-```bash
-kaggle competitions download -c ieee-fraud-detection -p data/raw
-```
-
-Extract the files into:
+Download the competition files from Kaggle and place them under `data/raw/`:
 
 ```text
 data/raw/
@@ -131,15 +121,15 @@ data/raw/
 └── test_identity.csv
 ```
 
-The dataset is not included in this repository because of its size and Kaggle distribution restrictions.
+The dataset is not included because of its size and Kaggle distribution restrictions.
 
-### 3. Train the pipeline
+### 3. Train the main ensemble
 
 ```bash
 python train.py
 ```
 
-Cached processed features are reused automatically. Use `--force-preprocess` to rebuild them or `--skip-smote` to disable oversampling.
+The pipeline reuses cached processed features when available and writes model checkpoints plus a training report under `models/checkpoints/`.
 
 ### 4. Tune models
 
@@ -147,23 +137,23 @@ Cached processed features are reused automatically. Use `--force-preprocess` to 
 python src/tune.py
 ```
 
-Best parameters are written to `models/optuna/best_params.json`.
+Optuna optimizes **PR-AUC**, which is more informative than accuracy for highly imbalanced fraud detection. Best parameters are saved to `models/optuna/best_params.json`.
 
-### 5. Evaluate stacking
+### 5. Run the stacking experiment
 
 ```bash
 python src/stacking.py
 ```
 
-Stacking metrics are written to `models/stacking/stacking_metrics.json`.
+Results are written to `models/stacking/stacking_metrics.json`.
 
-### 6. Run the random-split benchmark
+### 6. Run the random benchmark
 
 ```bash
 python -m src.benchmark_random
 ```
 
-This benchmark is intentionally separate from the main temporal evaluation.
+This is a comparison benchmark only; temporal validation remains the primary evaluation protocol.
 
 ### 7. Launch the dashboard
 
@@ -173,47 +163,87 @@ streamlit run app/streamlit_app.py
 
 ## Feature Engineering
 
-FraudX derives transaction-level signals from time, cards, addresses, emails, devices, identity fields, and historical transaction behavior. The feature pipeline includes temporal features, velocity signals, frequency/combination encodings, identity matching signals, and missing-value indicators.
+FraudX generates transaction-level signals including:
 
-Historical frequency features are designed to respect transaction ordering and reduce temporal leakage.
+- Log-transformed transaction amount
+- Hour and day-of-week features
+- Time since the previous transaction for a card
+- Historical card and combination frequencies
+- Card-level transaction velocity over configurable windows
+- Card/hour historical activity
+- Email-domain mismatch
+- M1–M9 match indicators
+- Selected Vesta features based on missingness
+- Missing-value-aware categorical encoding
+
+Time-dependent count features are calculated in transaction order and do not use future rows. This is important because fraud patterns can drift over time.
 
 ## Imbalanced Learning
 
-Fraud is a minority class, so FraudX applies SMOTE only after the chronological training split. Validation remains untouched to preserve the original class distribution. The boosting models also use appropriate class-balancing controls where configured.
+Fraud transactions are heavily underrepresented. FraudX applies **SMOTE only to the training split**, while validation remains untouched. The boosting models also use class-balancing mechanisms.
+
+```text
+Training data → SMOTE → Model fitting
+Validation    ─────────→ Evaluation
+```
 
 ## Model Optimization
 
-Optuna searches compact hyperparameter spaces for XGBoost, LightGBM, and CatBoost. PR-AUC is used as the primary optimization objective because it is more informative than accuracy for highly imbalanced fraud detection.
+The system uses three complementary gradient-boosting models:
 
-## Stacking
+- **XGBoost**
+- **LightGBM**
+- **CatBoost**
 
-The temporal pipeline combines base-model predictions with a Logistic Regression meta-model. The stacking workflow is designed so the meta-model learns from earlier model predictions rather than directly consuming final validation labels.
+Optuna searches a compact hyperparameter space using PR-AUC as the optimization objective. The default ensemble uses weighted soft voting:
+
+```text
+XGBoost  ── 35% ──┐
+LightGBM ── 35% ──┼──► Fraud Probability
+CatBoost ── 30% ──┘
+```
+
+The decision threshold is optimized on the validation set for F1 and persisted in the configuration used by the dashboard.
+
+## Stacking Experiment
+
+`src/stacking.py` provides a separate chronological stacking experiment. Base models are trained on earlier transactions, predictions from a later training segment train the logistic-regression meta-model, and the final model is evaluated on the held-out future validation segment.
+
+This keeps the experimental result separate from the default weighted ensemble so the repository's main training path remains reproducible and easy to understand.
 
 ## Explainability
 
-SHAP is used to provide:
+SHAP is used for model interpretation, including global feature importance, per-transaction explanations, waterfall plots, and feature contribution analysis.
 
-- Global feature importance
-- Per-transaction feature contributions
-- Waterfall-style explanations
-- Model-level interpretation for fraud investigations
+## Why Temporal Validation?
+
+Fraud behavior changes over time. A random split can place highly related transactions from the same period on both sides of the split and produce optimistic estimates.
+
+FraudX instead evaluates the realistic deployment scenario:
+
+```text
+Earlier transactions ─────────► Later transactions
+        TRAIN                       VALIDATION
+```
+
+The random benchmark is retained only to quantify the difference between conventional and time-aware validation.
 
 ## Dashboard
 
-The Streamlit interface supports:
+The Streamlit application provides:
 
-- Transaction fraud scoring
-- Individual prediction explanations
-- Model performance inspection
-- Confusion matrix and precision/recall analysis
-- PR/ROC evaluation
-- Threshold analysis
-- Feature-importance exploration
+- Transaction scoring from uploaded CSV rows or key manual inputs
+- Fraud probability and optimized threshold
+- SHAP transaction explanations
+- ROC and PR curves
+- Confusion matrix
+- Feature importance
+- Interactive threshold analysis
 
-## Technologies
+## Technology Stack
 
 Python · Pandas · NumPy · Scikit-learn · XGBoost · LightGBM · CatBoost · Optuna · SHAP · imbalanced-learn · Streamlit
 
 ## Project Goal
 
-FraudX is designed as an ML engineering project rather than a single-model benchmark. The focus is on realistic validation, leakage-aware feature engineering, imbalanced classification, ensemble modeling, explainability, and an interactive inference workflow.
+FraudX focuses on building a realistic and interpretable fraud-detection workflow rather than optimizing a single benchmark number. It demonstrates **time-aware ML validation, leakage-conscious feature engineering, imbalanced classification, ensemble learning, hyperparameter optimization, threshold selection, stacking, explainability, and model serving through an interactive dashboard**.
