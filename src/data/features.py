@@ -120,7 +120,10 @@ def drop_id_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 def encode_categoricals(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    for col in df.select_dtypes(include=["object", "category"]).columns:
+    categorical_cols = df.select_dtypes(
+        include=["object", "string", "category"]
+    ).columns
+    for col in categorical_cols:
         df[col] = pd.Categorical(df[col]).codes.astype(float)
         df[col] = df[col].replace(-1, np.nan)
     return df
