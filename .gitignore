@@ -1,15 +1,27 @@
-# Dataset
-data/raw/
+# Data
+\data/raw/
 data/processed/
 
-# Generated models
+# Generated model artifacts
 models/checkpoints/
 models/optuna/
 models/stacking/
 
-# CatBoost
+# Training/runtime artifacts
 catboost_info/
+mlruns/
+*.log
 
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
