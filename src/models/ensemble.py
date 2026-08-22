@@ -34,18 +34,18 @@ class FraudEnsemble:
         lgb_cfg = models_cfg.get("lightgbm", {})
         cat_cfg = models_cfg.get("catboost", {})
 
+        # Start with config values, then let tuned Optuna parameters override them.
+        # Defaults are inserted with setdefault to avoid duplicate keyword arguments.
         xgb_params = {
             key: value
             for key, value in xgb_cfg.items()
-            if key not in {"enabled", "random_state", "eval_metric"}
+            if key not in {"enabled", "random_state"}
         }
         xgb_params.update(tuned.get("XGBoost", {}).get("params", {}))
-        self.xgb_model = XGBClassifier(
-            **xgb_params,
-            eval_metric=xgb_cfg.get("eval_metric", "aucpr"),
-            tree_method=xgb_cfg.get("tree_method", "hist"),
-            random_state=seed,
-        )
+        xgb_params.setdefault("eval_metric", xgb_cfg.get("eval_metric", "aucpr"))
+        xgb_params.setdefault("tree_method", xgb_cfg.get("tree_method", "hist"))
+        xgb_params.setdefault("random_state", seed)
+        self.xgb_model = XGBClassifier(**xgb_params)
 
         lgb_params = {
             key: value
@@ -53,27 +53,25 @@ class FraudEnsemble:
             if key not in {"enabled", "random_state"}
         }
         lgb_params.update(tuned.get("LightGBM", {}).get("params", {}))
-        self.lgb_model = LGBMClassifier(
-            **lgb_params,
-            is_unbalance=lgb_cfg.get("is_unbalance", True),
-            verbose=-1,
-            random_state=seed,
-        )
+        lgb_params.setdefault("is_unbalance", lgb_cfg.get("is_unbalance", True))
+        lgb_params.setdefault("random_state", seed)
+        lgb_params.setdefault("verbose", -1)
+        self.lgb_model = LGBMClassifier(**lgb_params)
 
         cat_params = {
             key: value
             for key, value in cat_cfg.items()
-            if key not in {"enabled", "random_seed", "eval_metric"}
+            if key not in {"enabled", "random_seed"}
         }
         cat_params.update(tuned.get("CatBoost", {}).get("params", {}))
-        self.cat_model = CatBoostClassifier(
-            **cat_params,
-            auto_class_weights=cat_cfg.get("auto_class_weights", "Balanced"),
-            loss_function="Logloss",
-            eval_metric=cat_cfg.get("eval_metric", "AUC"),
-            random_seed=seed,
-            verbose=False,
+        cat_params.setdefault(
+            "auto_class_weights", cat_cfg.get("auto_class_weights", "Balanced")
         )
+        cat_params.setdefault("loss_function", "Logloss")
+        cat_params.setdefault("eval_metric", cat_cfg.get("eval_metric", "AUC"))
+        cat_params.setdefault("random_seed", seed)
+        cat_params.setdefault("verbose", False)
+        self.cat_model = CatBoostClassifier(**cat_params)
 
     def fit(self, X_train, y_train, X_val, y_val):
         self.feature_names = list(X_train.columns)
