@@ -4,23 +4,37 @@ FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud De
 
 ## Results
 
-### Latest temporal training run
+### Final tuned temporal evaluation
 
-The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation. The latest local run completed successfully on the full 590,540-row training set.
+The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation. The final local run completed successfully on the full **590,540-row** training set after Optuna tuning.
 
 | Model | ROC-AUC | PR-AUC | F1 |
 |---|---:|---:|---:|
-| XGBoost | 0.8640 | 0.3617 | 0.3802 |
-| LightGBM | 0.8824 | 0.4489 | 0.4512 |
-| CatBoost | 0.8711 | 0.4396 | 0.4546 |
-| **Weighted Ensemble** | **0.8888** | **0.4726** | **0.4681** |
+| XGBoost | 0.8832 | 0.4551 | 0.4692 |
+| LightGBM | 0.8491 | 0.3748 | 0.3993 |
+| CatBoost | 0.8773 | 0.4624 | 0.4778 |
+| **Weighted Ensemble** | **0.8921** | **0.4857** | **0.5081** |
 
-**Best ensemble threshold:** 0.636  
-**Precision:** 0.5634 · **Recall:** 0.4003 · **F1:** 0.4681
+**Best ensemble threshold:** 0.426  
+**Precision:** 0.5725 · **Recall:** 0.4567 · **F1:** 0.5081
 
 SMOTE increased the fraud class in the training split from **16,599 to 136,749** samples while leaving validation untouched.
 
-> Earlier benchmark results may differ when model parameters, feature engineering, library versions, or cached artifacts change. The values above reflect the latest verified local training run.
+Compared with the pre-tuning ensemble, the final tuned model improved ROC-AUC from **0.8888 to 0.8921**, PR-AUC from **0.4726 to 0.4857**, and F1 from **0.4681 to 0.5081**.
+
+> These values reflect the latest verified local training run. Results can vary with library versions, cached artifacts, configuration, or feature changes.
+
+### Optuna tuning
+
+Optuna optimized **PR-AUC** for each base learner. The best observed tuning scores were:
+
+| Model | Best PR-AUC |
+|---|---:|
+| XGBoost | **0.5422** |
+| LightGBM | 0.5118 |
+| CatBoost | 0.5149 |
+
+Best parameters are saved to `models/optuna/best_params.json` and automatically consumed by the ensemble training pipeline.
 
 ### Stacking experiment
 
