@@ -13,7 +13,6 @@ def add_log_amount(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    # TransactionDT is seconds from a reference point in the IEEE-CIS dataset.
     df["hour"] = (df["TransactionDT"] // 3600) % 24
     df["day_of_week"] = (df["TransactionDT"] // 86400) % 7
     return df
@@ -30,31 +29,33 @@ def add_email_mismatch(df: pd.DataFrame) -> pd.DataFrame:
 def add_velocity_features(df: pd.DataFrame, time_windows: list[int]) -> pd.DataFrame:
     """Add causal card-level amount statistics using current/prior transactions."""
     df = df.copy().sort_values("TransactionDT").reset_index(drop=True)
-
     if "card1" not in df or "TransactionAmt" not in df:
         return df
 
     for window in time_windows:
         label = f"{window // 3600}h" if window < 86400 else f"{window // 86400}d"
-        count_col = f"card1_amt_count_{label}"
-        sum_col = f"card1_amt_sum_{label}"
-        mean_col = f"card1_amt_mean_{label}"
-        std_col = f"card1_amt_std_{label}"
+        cols = [
+            f"card1_amt_count_{label}",
+            f"card1_amt_sum_{label}",
+            f"card1_amt_mean_{label}",
+            f"card1_amt_std_{label}",
+        ]
+        result = np.zeros((len(df), 4), dtype=float)
 
-        values = {count_col: [], sum_col: [], mean_col: [], std_col: []}
         for _, group in df.groupby("card1", sort=False):
+            positions = group.index.to_numpy()
             dt = group["TransactionDT"].to_numpy()
             amt = group["TransactionAmt"].to_numpy()
             for i, t in enumerate(dt):
                 mask = (dt[: i + 1] <= t) & (dt[: i + 1] > t - window)
                 window_amt = amt[: i + 1][mask]
-                values[count_col].append(len(window_amt))
-                values[sum_col].append(float(window_amt.sum()))
-                values[mean_col].append(float(window_amt.mean()) if len(window_amt) else 0.0)
-                values[std_col].append(float(window_amt.std()) if len(window_amt) > 1 else 0.0)
+                result[positions[i], 0] = len(window_amt)
+                result[positions[i], 1] = window_amt.sum()
+                result[positions[i], 2] = window_amt.mean() if len(window_amt) else 0.0
+                result[positions[i], 3] = window_amt.std() if len(window_amt) > 1 else 0.0
 
-        for col, vals in values.items():
-            df[col] = vals
+        for i, col in enumerate(cols):
+            df[col] = result[:, i]
 
     return df
 
