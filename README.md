@@ -2,6 +2,15 @@
 
 FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud Detection dataset. It combines **time-aware validation, leakage-conscious feature engineering, class-imbalance handling, gradient-boosting ensembles, Optuna tuning, threshold optimization, SHAP explanations, automated tests, and a Streamlit dashboard**.
 
+## Recruiter Snapshot
+
+- **590,540** transactions processed with chronological train/validation evaluation.
+- **0.8921 ROC-AUC, 0.4857 PR-AUC, and 0.5081 F1** from the final tuned weighted ensemble.
+- Improved ensemble **F1 by ~8.5%** after Optuna tuning (0.4681 → 0.5081).
+- Built a separate chronological stacking pipeline reaching **0.9177 ROC-AUC / 0.5445 PR-AUC**.
+- Added leakage-focused feature tests, model-contract tests, and **8 passing pytest tests**.
+- Deployed the trained ensemble through an interactive **Streamlit scoring and explainability dashboard**.
+
 ## Results
 
 ### Final tuned temporal evaluation
@@ -38,7 +47,16 @@ Best parameters are saved to `models/optuna/best_params.json` and automatically 
 
 ### Stacking experiment
 
-A separate chronological stacking experiment is available through `src/stacking.py`. Its results should be regenerated after changes to the feature pipeline or model configuration rather than treated as immutable benchmark numbers.
+A separate chronological stacking experiment was also verified locally:
+
+| Metric | Stacking |
+|---|---:|
+| ROC-AUC | **0.9177** |
+| PR-AUC | **0.5445** |
+| F1 | **0.4875** |
+| Threshold | 0.810 |
+
+Stacking remains a separate experiment rather than silently replacing the default weighted ensemble.
 
 ### Random-split benchmark
 
@@ -189,6 +207,8 @@ The test suite covers chronological splitting, historical feature behavior, nume
 streamlit run app/streamlit_app.py
 ```
 
+The dashboard was verified locally with the trained checkpoints and processed validation data.
+
 ## Feature Engineering
 
 FraudX generates transaction-level signals including:
@@ -252,6 +272,8 @@ The repository includes lightweight unit tests designed to catch common ML pipel
 - Numeric feature output after preprocessing
 - Evaluation metric and threshold contracts
 - Ensemble probability shape and bounds
+
+The current local suite passes **8/8 tests**.
 
 Run the suite with:
 
