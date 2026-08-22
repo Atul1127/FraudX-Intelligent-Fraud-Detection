@@ -34,8 +34,6 @@ class FraudEnsemble:
         lgb_cfg = models_cfg.get("lightgbm", {})
         cat_cfg = models_cfg.get("catboost", {})
 
-        # Start with config values, then let tuned Optuna parameters override them.
-        # Defaults are inserted with setdefault to avoid duplicate keyword arguments.
         xgb_params = {
             key: value
             for key, value in xgb_cfg.items()
@@ -76,7 +74,8 @@ class FraudEnsemble:
     def fit(self, X_train, y_train, X_val, y_val):
         self.feature_names = list(X_train.columns)
         self.xgb_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
-        self.lgb_model.fit(X_train, y_train, eval_set=[(X_val, y_val)])
+        # LightGBM 4.x deprecates eval_set in favor of eval_X/eval_y.
+        self.lgb_model.fit(X_train, y_train, eval_X=X_val, eval_y=y_val)
         self.cat_model.fit(X_train, y_train, eval_set=(X_val, y_val), verbose=False)
         return self
 
