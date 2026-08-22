@@ -120,9 +120,7 @@ def drop_id_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 def encode_categoricals(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    categorical_cols = df.select_dtypes(
-        include=["object", "string", "category"]
-    ).columns
+    categorical_cols = df.select_dtypes(include=["object", "string", "category"]).columns
     for col in categorical_cols:
         df[col] = pd.Categorical(df[col]).codes.astype(float)
         df[col] = df[col].replace(-1, np.nan)
@@ -132,13 +130,23 @@ def encode_categoricals(df: pd.DataFrame) -> pd.DataFrame:
 def build_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Build deterministic, time-ordered features without future-row counts."""
     df = df.copy().sort_values("TransactionDT").reset_index(drop=True)
+    features_cfg = cfg.get("features", {})
+    velocity_cfg = features_cfg.get("velocity", {})
+    frequency_cfg = features_cfg.get("frequency", {})
+
     df = add_log_amount(df)
     df = add_time_features(df)
     df = add_email_mismatch(df)
     df = add_time_since_last_txn(df)
-    df = add_velocity_features(df, cfg["features"]["time_windows"])
+
+    if velocity_cfg.get("enabled", True):
+        df = add_velocity_features(df, velocity_cfg.get("windows", [3600, 86400, 604800]))
+
     df = add_hourly_txn_count(df)
-    df = add_frequency_encodings(df, cfg["features"]["freq_encode_cols"])
+
+    if frequency_cfg.get("enabled", True):
+        df = add_frequency_encodings(df, frequency_cfg.get("columns", []))
+
     df = add_combination_feature(df)
     df = encode_match_features(df)
     df = select_v_features(df, keep=50)
@@ -149,10 +157,13 @@ def build_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 def apply_smote(
     X_train: pd.DataFrame, y_train: pd.Series, cfg: dict
 ) -> tuple[pd.DataFrame, pd.Series]:
+    sm_cfg = cfg.get("smote", {})
     sm = SMOTE(
-        sampling_strategy=cfg["smote"]["sampling_strategy"],
-        k_neighbors=cfg["smote"]["k_neighbors"],
-        random_state=cfg["data"]["random_seed"],
+        sampling_strategy=sm_cfg.get("sampling_strategy", 0.3),
+        k_neighbors=sm_cfg.get("k_neighbors", 5),
+        random_state=sm_cfg.get(
+            "random_state", cfg.get("data", {}).get("random_state", 42)
+        ),
     )
     X_filled = X_train.fillna(X_train.median(numeric_only=True))
     X_res, y_res = sm.fit_resample(X_filled, y_train)
