@@ -4,31 +4,31 @@ FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud De
 
 ## Results
 
-### Main temporal evaluation
+### Latest temporal training run
 
-The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation.
+The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation. The latest local run completed successfully on the full 590,540-row training set.
 
 | Model | ROC-AUC | PR-AUC | F1 |
 |---|---:|---:|---:|
-| XGBoost | 0.8750 | 0.3604 | 0.3958 |
-| LightGBM | 0.8780 | 0.4482 | 0.4618 |
-| CatBoost | 0.8807 | 0.4612 | 0.4753 |
-| **Weighted Ensemble** | **0.9011** | **0.4946** | **0.4980** |
+| XGBoost | 0.8640 | 0.3617 | 0.3802 |
+| LightGBM | 0.8824 | 0.4489 | 0.4512 |
+| CatBoost | 0.8711 | 0.4396 | 0.4546 |
+| **Weighted Ensemble** | **0.8888** | **0.4726** | **0.4681** |
+
+**Best ensemble threshold:** 0.636  
+**Precision:** 0.5634 · **Recall:** 0.4003 · **F1:** 0.4681
+
+SMOTE increased the fraud class in the training split from **16,599 to 136,749** samples while leaving validation untouched.
+
+> Earlier benchmark results may differ when model parameters, feature engineering, library versions, or cached artifacts change. The values above reflect the latest verified local training run.
 
 ### Stacking experiment
 
-A separate chronological stacking experiment achieved **0.9199 ROC-AUC** and **0.5504 PR-AUC**. Stacking is kept as an explicit experiment rather than silently replacing the default weighted ensemble used by the training pipeline and dashboard.
+A separate chronological stacking experiment is available through `src/stacking.py`. Its results should be regenerated after changes to the feature pipeline or model configuration rather than treated as immutable benchmark numbers.
 
 ### Random-split benchmark
 
-| Model | ROC-AUC | PR-AUC | F1 |
-|---|---:|---:|---:|
-| XGBoost | 0.9587 | 0.7723 | 0.7304 |
-| LightGBM | 0.9579 | 0.7588 | 0.7210 |
-| CatBoost | 0.9561 | 0.7212 | 0.6856 |
-| **Weighted Ensemble** | **0.9610** | **0.7717** | **0.7290** |
-
-The gap between random and temporal validation demonstrates why future-transaction validation is the primary evaluation protocol.
+A random-split benchmark is retained as a comparison experiment. It is intentionally not the primary evaluation because random splitting can produce optimistic estimates for time-dependent fraud data.
 
 ## Architecture
 
