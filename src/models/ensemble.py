@@ -18,33 +18,59 @@ class FraudEnsemble:
         self.cfg = cfg
         self.feature_names: list[str] | None = None
 
-        tuned_path = Path(cfg.get("optuna", {}).get("best_params_path", "models/optuna/best_params.json"))
+        tuned_path = Path(
+            cfg.get("optuna", {}).get(
+                "best_params_path", "models/optuna/best_params.json"
+            )
+        )
         tuned = {}
         if tuned_path.exists():
             with tuned_path.open() as f:
                 tuned = json.load(f)
 
-        seed = cfg["data"]["random_seed"]
-        xgb_cfg = cfg["xgboost"]
-        lgb_cfg = cfg["lightgbm"]
+        seed = cfg["data"].get("random_seed", cfg["data"].get("random_state", 42))
+        models_cfg = cfg.get("models", {})
+        xgb_cfg = models_cfg.get("xgboost", {})
+        lgb_cfg = models_cfg.get("lightgbm", {})
+        cat_cfg = models_cfg.get("catboost", {})
 
+        xgb_params = {
+            key: value
+            for key, value in xgb_cfg.items()
+            if key not in {"enabled", "random_state", "eval_metric"}
+        }
+        xgb_params.update(tuned.get("XGBoost", {}).get("params", {}))
         self.xgb_model = XGBClassifier(
-            **tuned.get("XGBoost", {}).get("params", {}),
-            eval_metric=xgb_cfg["eval_metric"],
-            tree_method=xgb_cfg["tree_method"],
+            **xgb_params,
+            eval_metric=xgb_cfg.get("eval_metric", "aucpr"),
+            tree_method=xgb_cfg.get("tree_method", "hist"),
             random_state=seed,
         )
+
+        lgb_params = {
+            key: value
+            for key, value in lgb_cfg.items()
+            if key not in {"enabled", "random_state"}
+        }
+        lgb_params.update(tuned.get("LightGBM", {}).get("params", {}))
         self.lgb_model = LGBMClassifier(
-            **tuned.get("LightGBM", {}).get("params", {}),
-            is_unbalance=True,
+            **lgb_params,
+            is_unbalance=lgb_cfg.get("is_unbalance", True),
             verbose=-1,
             random_state=seed,
         )
+
+        cat_params = {
+            key: value
+            for key, value in cat_cfg.items()
+            if key not in {"enabled", "random_seed", "eval_metric"}
+        }
+        cat_params.update(tuned.get("CatBoost", {}).get("params", {}))
         self.cat_model = CatBoostClassifier(
-            **tuned.get("CatBoost", {}).get("params", {}),
-            auto_class_weights="Balanced",
+            **cat_params,
+            auto_class_weights=cat_cfg.get("auto_class_weights", "Balanced"),
             loss_function="Logloss",
-            eval_metric="AUC",
+            eval_metric=cat_cfg.get("eval_metric", "AUC"),
             random_seed=seed,
             verbose=False,
         )
