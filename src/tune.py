@@ -13,7 +13,6 @@ from catboost import CatBoostClassifier
 
 
 TRIALS = 5
-INNER_VALIDATION_SIZE = 0.2
 
 
 def load_data(cfg):
@@ -28,8 +27,12 @@ def load_data(cfg):
     return X_train, y_train, X_val, y_val
 
 
-def temporal_inner_split(X_train, y_train):
-    split = int(len(X_train) * (1 - INNER_VALIDATION_SIZE))
+def temporal_inner_split(X_train, y_train, validation_size: float):
+    if not 0 < validation_size < 1:
+        raise ValueError("inner validation size must be between 0 and 1")
+    split = int(len(X_train) * (1 - validation_size))
+    if split <= 0 or split >= len(X_train):
+        raise ValueError("inner validation split must leave train and validation rows")
     return (
         X_train.iloc[:split],
         X_train.iloc[split:],
@@ -38,7 +41,7 @@ def temporal_inner_split(X_train, y_train):
     )
 
 
-def tune_xgb(X_train, y_train, X_val, y_val):
+def tune_xgb(X_train, y_train, X_val, y_val, trials: int):
     def objective(trial):
         model = XGBClassifier(
             n_estimators=trial.suggest_int("n_estimators", 250, 450),
@@ -55,11 +58,11 @@ def tune_xgb(X_train, y_train, X_val, y_val):
         return average_precision_score(y_val, model.predict_proba(X_val)[:, 1])
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=TRIALS)
+    study.optimize(objective, n_trials=trials)
     return study
 
 
-def tune_lgb(X_train, y_train, X_val, y_val):
+def tune_lgb(X_train, y_train, X_val, y_val, trials: int):
     def objective(trial):
         model = LGBMClassifier(
             n_estimators=trial.suggest_int("n_estimators", 250, 450),
@@ -76,11 +79,11 @@ def tune_lgb(X_train, y_train, X_val, y_val):
         return average_precision_score(y_val, model.predict_proba(X_val)[:, 1])
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=TRIALS)
+    study.optimize(objective, n_trials=trials)
     return study
 
 
-def tune_cat(X_train, y_train, X_val, y_val):
+def tune_cat(X_train, y_train, X_val, y_val, trials: int):
     def objective(trial):
         model = CatBoostClassifier(
             iterations=trial.suggest_int("iterations", 250, 450),
@@ -96,7 +99,7 @@ def tune_cat(X_train, y_train, X_val, y_val):
         return average_precision_score(y_val, model.predict_proba(X_val)[:, 1])
 
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=TRIALS)
+    study.optimize(objective, n_trials=trials)
     return study
 
 
@@ -104,30 +107,33 @@ def main():
     with open("config.yaml") as f:
         cfg = yaml.safe_load(f)
 
-    X_train_full, y_train_full, X_final_val, y_final_val = load_data(cfg)
+    X_train_full, y_train_full, X_final_val, _ = load_data(cfg)
+    optuna_cfg = cfg.get("optuna", {})
+    trials = int(optuna_cfg.get("n_trials", TRIALS))
+    inner_validation_size = float(optuna_cfg.get("inner_validation_size", 0.2))
 
     # Keep the repository's final chronological validation set untouched.
     X_train, X_inner_val, y_train, y_inner_val = temporal_inner_split(
-        X_train_full, y_train_full
+        X_train_full, y_train_full, inner_validation_size
     )
 
     print(f"Development train: {len(X_train):,}")
     print(f"Inner validation: {len(X_inner_val):,}")
     print(f"Final untouched validation: {len(X_final_val):,}")
-    print(f"Trials per model: {TRIALS}")
+    print(f"Trials per model: {trials}")
 
     results = {}
 
     print("\nTuning XGBoost...")
-    xgb = tune_xgb(X_train, y_train, X_inner_val, y_inner_val)
+    xgb = tune_xgb(X_train, y_train, X_inner_val, y_inner_val, trials)
     results["XGBoost"] = {"pr_auc": xgb.best_value, "params": xgb.best_params}
 
     print("\nTuning LightGBM...")
-    lgb = tune_lgb(X_train, y_train, X_inner_val, y_inner_val)
+    lgb = tune_lgb(X_train, y_train, X_inner_val, y_inner_val, trials)
     results["LightGBM"] = {"pr_auc": lgb.best_value, "params": lgb.best_params}
 
     print("\nTuning CatBoost...")
-    cat = tune_cat(X_train, y_train, X_inner_val, y_inner_val)
+    cat = tune_cat(X_train, y_train, X_inner_val, y_inner_val, trials)
     results["CatBoost"] = {"pr_auc": cat.best_value, "params": cat.best_params}
 
     output = Path("models/optuna")
