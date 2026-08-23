@@ -7,7 +7,7 @@ FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud De
 - **590,540** transactions processed with chronological train/validation evaluation.
 - **0.8921 ROC-AUC, 0.4857 PR-AUC, and 0.5081 F1** from the final tuned weighted ensemble.
 - Improved ensemble **F1 by ~8.5%** after Optuna tuning (0.4681 → 0.5081).
-- Built a separate chronological stacking pipeline reaching **0.9177 ROC-AUC / 0.5445 PR-AUC**.
+- Built a separate chronological stacking experiment reaching **0.9177 ROC-AUC / 0.5445 PR-AUC**.
 - Added leakage-focused feature tests, model-contract tests, and **8 passing pytest tests**.
 - Deployed the trained ensemble through an interactive **Streamlit scoring and explainability dashboard**.
 
@@ -15,7 +15,7 @@ FraudX is an interpretable fraud-detection system built on the IEEE-CIS Fraud De
 
 ### Final tuned temporal evaluation
 
-The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation. The final local run completed successfully on the full **590,540-row** training set after Optuna tuning.
+The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation. The reported results are from the latest verified local training run.
 
 | Model | ROC-AUC | PR-AUC | F1 |
 |---|---:|---:|---:|
@@ -35,15 +35,7 @@ Compared with the pre-tuning ensemble, the final tuned model improved ROC-AUC fr
 
 ### Optuna tuning
 
-Optuna optimized **PR-AUC** for each base learner. The best observed tuning scores were:
-
-| Model | Best PR-AUC |
-|---|---:|
-| XGBoost | **0.5422** |
-| LightGBM | 0.5118 |
-| CatBoost | 0.5149 |
-
-Best parameters are saved to `models/optuna/best_params.json` and automatically consumed by the ensemble training pipeline.
+Optuna optimizes **PR-AUC** for each base learner using an inner chronological validation split. The repository's final validation period is kept separate from hyperparameter selection. Best parameters are saved to `models/optuna/best_params.json`.
 
 ### Stacking experiment
 
@@ -175,7 +167,7 @@ The pipeline reuses cached processed features when available and writes model ch
 python src/tune.py
 ```
 
-Optuna optimizes **PR-AUC**, which is more informative than accuracy for highly imbalanced fraud detection. Best parameters are saved to `models/optuna/best_params.json`.
+Optuna optimizes **PR-AUC** using an inner chronological validation split so the final validation period is not used for hyperparameter selection. Best parameters are saved to `models/optuna/best_params.json`.
 
 ### 5. Run the stacking experiment
 
@@ -206,8 +198,6 @@ The test suite covers chronological splitting, historical feature behavior, nume
 ```bash
 streamlit run app/streamlit_app.py
 ```
-
-The dashboard was verified locally with the trained checkpoints and processed validation data.
 
 ## Feature Engineering
 
