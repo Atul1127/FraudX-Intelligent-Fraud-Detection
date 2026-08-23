@@ -1,122 +1,103 @@
 data:
-  raw_dir: "data/raw"
-  processed_dir: "data/processed"
-  model_dir: "models"
-  train_file: "train_transaction.csv"
-  test_file: "test_transaction.csv"
+  model_dir: models
+  processed_dir: data/processed
+  random_state: 42
+  raw_dir: data/raw
+  test_file: test_transaction.csv
   test_size: 0.2
-  random_state: 42
-
-features:
-  target_col: "isFraud"
-  id_col: "TransactionID"
-
-  transaction:
-    amount_log: true
-    amount_bins: true
-    time_features: true
-
-  card:
-    enabled: true
-    combinations: true
-
-  address:
-    enabled: true
-    combinations: true
-
-  email:
-    enabled: true
-    combinations: true
-
-  identity:
-    enabled: true
-    combinations: true
-
-  velocity:
-    enabled: true
-    windows:
-      - 3600
-      - 86400
-      - 604800
-
-  frequency:
-    enabled: true
-    columns:
-      - "card1"
-      - "card2"
-      - "card3"
-      - "card5"
-      - "addr1"
-      - "addr2"
-      - "P_emaildomain"
-      - "R_emaildomain"
-
-preprocessing:
-  missing_value_strategy: "median"
-  categorical_encoding: "frequency"
-  scale_numeric: false
-
-smote:
-  enabled: true
-  sampling_strategy: 0.3
-  random_state: 42
-
-models:
-  xgboost:
-    enabled: true
-    n_estimators: 500
-    max_depth: 6
-    learning_rate: 0.05
-    subsample: 0.8
-    colsample_bytree: 0.8
-    scale_pos_weight: 9
-    random_state: 42
-    eval_metric: "aucpr"
-
-  lightgbm:
-    enabled: true
-    n_estimators: 500
-    max_depth: -1
-    learning_rate: 0.05
-    num_leaves: 31
-    subsample: 0.8
-    colsample_bytree: 0.8
-    is_unbalance: true
-    random_state: 42
-    metric: "average_precision"
-
-  catboost:
-    enabled: true
-    iterations: 500
-    depth: 6
-    learning_rate: 0.05
-    auto_class_weights: "Balanced"
-    random_seed: 42
-    eval_metric: "AUC"
-
+  train_file: train_transaction.csv
 ensemble:
-  default_threshold: 0.34561272049284264
-
+  default_threshold: 0.42570148755502263
 evaluation:
-  primary_metric: "pr_auc"
-  secondary_metrics:
-    - "roc_auc"
-    - "precision"
-    - "recall"
-    - "f1"
-
   optimize_threshold: true
-
+  primary_metric: pr_auc
+  secondary_metrics:
+  - roc_auc
+  - precision
+  - recall
+  - f1
 explainability:
   enabled: true
   shap_samples: 500
-
+features:
+  address:
+    combinations: true
+    enabled: true
+  card:
+    combinations: true
+    enabled: true
+  email:
+    combinations: true
+    enabled: true
+  frequency:
+    columns:
+    - card1
+    - card2
+    - card3
+    - card5
+    - addr1
+    - addr2
+    - P_emaildomain
+    - R_emaildomain
+    enabled: true
+  id_col: TransactionID
+  identity:
+    combinations: true
+    enabled: true
+  target_col: isFraud
+  transaction:
+    amount_bins: true
+    amount_log: true
+    time_features: true
+  velocity:
+    enabled: true
+    windows:
+    - 3600
+    - 86400
+    - 604800
+models:
+  catboost:
+    auto_class_weights: Balanced
+    depth: 6
+    enabled: true
+    eval_metric: AUC
+    iterations: 500
+    learning_rate: 0.05
+    random_seed: 42
+  lightgbm:
+    colsample_bytree: 0.8
+    enabled: true
+    is_unbalance: true
+    learning_rate: 0.05
+    max_depth: -1
+    metric: average_precision
+    n_estimators: 500
+    num_leaves: 31
+    random_state: 42
+    subsample: 0.8
+  xgboost:
+    colsample_bytree: 0.8
+    enabled: true
+    eval_metric: aucpr
+    learning_rate: 0.05
+    max_depth: 6
+    n_estimators: 500
+    random_state: 42
+    scale_pos_weight: 9
+    subsample: 0.8
+optuna:
+  direction: maximize
+  enabled: true
+  metric: pr_auc
+  n_trials: 5
+preprocessing:
+  categorical_encoding: frequency
+  missing_value_strategy: median
+  scale_numeric: false
+smote:
+  enabled: true
+  random_state: 42
+  sampling_strategy: 0.3
 training:
   early_stopping_rounds: 50
   verbose: true
-
-optuna:
-  enabled: true
-  n_trials: 5
-  direction: "maximize"
-  metric: "pr_auc"
