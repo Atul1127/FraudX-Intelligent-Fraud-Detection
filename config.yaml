@@ -88,6 +88,7 @@ models:
 optuna:
   direction: maximize
   enabled: true
+  inner_validation_size: 0.2
   metric: pr_auc
   n_trials: 5
 preprocessing:
