@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.data.features import fit_category_mappings
 from src.models.ensemble import FraudEnsemble
 from src.evaluate import compute_metrics, find_best_threshold
 
@@ -18,6 +17,7 @@ class Trainer:
 
     def set_category_mappings(self, mappings: dict[str, list]) -> None:
         self.category_mappings = mappings
+        self.model.category_mappings = mappings
 
     def run(
         self,
@@ -116,16 +116,6 @@ class Trainer:
         checkpoint_dir = Path(checkpoint_dir)
 
         self.model.save(checkpoint_dir)
-
-        with open(
-            checkpoint_dir / "feature_metadata.joblib",
-            "wb",
-        ) as f:
-            import joblib
-            joblib.dump(
-                {"category_mappings": self.category_mappings},
-                f,
-            )
 
         with open(
             checkpoint_dir / "training_report.json",
