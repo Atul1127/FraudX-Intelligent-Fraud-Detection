@@ -55,6 +55,10 @@ features:
     - 3600
     - 86400
     - 604800
+mlflow:
+  enabled: true
+  tracking_uri: file:./mlruns
+  experiment_name: FraudX-Fraud-Detection
 models:
   catboost:
     auto_class_weights: Balanced
