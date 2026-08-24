@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 
 from api.dependencies import load_model
 from api.feature_store import OnlineFeatureStore
@@ -14,6 +14,7 @@ from api.schemas import (
     PredictionResponse,
     TransactionRequest,
 )
+from src.monitoring.drift import prediction_shift
 
 
 model = None
@@ -30,8 +31,6 @@ async def lifespan(app: FastAPI):
     except FileNotFoundError:
         model, cfg = None, {}
 
-    # MongoDB is required for raw online scoring because historical features
-    # must be built from prior transactions before inference.
     mongo.connect()
     feature_store = OnlineFeatureStore(mongo, cfg) if model is not None else None
     yield
@@ -43,7 +42,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FraudX API",
     description="Production-oriented fraud detection inference API.",
-    version="1.2.0",
+    version="1.3.0",
     lifespan=lifespan,
 )
 
@@ -84,6 +83,35 @@ def model_info() -> ModelInfoResponse:
         ensemble_weights=dict(model.WEIGHTS),
         feature_count=len(model.feature_names or []),
     )
+
+
+@app.get("/monitoring/predictions")
+def prediction_monitoring(
+    window_hours: int = Query(24, ge=1, le=168),
+) -> dict[str, Any]:
+    """Monitor prediction volume, fraud rate, score shift, and PSI drift."""
+    if not mongo.connected:
+        raise HTTPException(status_code=503, detail="MongoDB is required for prediction monitoring.")
+
+    data = mongo.get_prediction_monitoring(window_hours)
+    current = data["current"]
+    previous = data["previous"]
+
+    result: dict[str, Any] = {
+        "window_hours": window_hours,
+        "current": {k: v for k, v in current.items() if k != "probabilities"},
+        "previous": {k: v for k, v in previous.items() if k != "probabilities"},
+        "status": "insufficient_data",
+    }
+
+    if current["probabilities"] and previous["probabilities"]:
+        shift = prediction_shift(previous["probabilities"], current["probabilities"])
+        result["prediction_drift"] = shift
+        result["status"] = shift["level"]
+    else:
+        result["prediction_drift"] = {"psi": None, "level": "insufficient_data"}
+
+    return result
 
 
 @app.post("/predict", response_model=PredictionResponse)
