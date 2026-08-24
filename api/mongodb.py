@@ -9,7 +9,7 @@ from pymongo.collection import Collection
 
 
 class MongoStore:
-    """Small persistence layer for transactions, predictions and audit records."""
+    """Persistence and historical transaction access for online FraudX serving."""
 
     def __init__(self) -> None:
         self.uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
@@ -44,7 +44,21 @@ class MongoStore:
         return self.db[name]
 
     def _ensure_indexes(self) -> None:
-        self._collection("transactions").create_index("transaction_id", unique=True)
+        transactions = self._collection("transactions")
+        transactions.create_index("transaction_id", unique=True)
+        transactions.create_index("data.TransactionDT")
+        for field in [
+            "card1",
+            "card2",
+            "card3",
+            "card5",
+            "addr1",
+            "addr2",
+            "P_emaildomain",
+            "R_emaildomain",
+        ]:
+            transactions.create_index(f"data.{field}")
+
         self._collection("predictions").create_index("transaction_id")
         self._collection("predictions").create_index("created_at")
         self._collection("audit_logs").create_index("created_at")
@@ -62,6 +76,47 @@ class MongoStore:
             },
             upsert=True,
         )
+
+    def get_history(
+        self,
+        transaction: dict[str, Any],
+        frequency_columns: list[str],
+        max_window: int,
+    ) -> list[dict[str, Any]]:
+        """Fetch recent history relevant to the incoming transaction.
+
+        The query returns rows sharing at least one configured frequency key,
+        plus the time range needed by the largest velocity window. MongoDB's
+        indexes keep these equality/time lookups bounded as the store grows.
+        """
+        collection = self._collection("transactions")
+        transaction_dt = transaction.get("TransactionDT")
+        if transaction_dt is None:
+            raise ValueError("TransactionDT is required for online feature construction")
+
+        clauses: list[dict[str, Any]] = []
+        for field in frequency_columns:
+            value = transaction.get(field)
+            if value is not None:
+                clauses.append({f"data.{field}": value})
+
+        time_filter = {
+            "data.TransactionDT": {
+                "$lt": transaction_dt,
+                "$gte": max(0, transaction_dt - max_window),
+            }
+        }
+
+        query: dict[str, Any]
+        if clauses:
+            query = {"$and": [time_filter, {"$or": clauses}]}
+        else:
+            query = time_filter
+
+        documents = collection.find(query, {"_id": 0, "data": 1}).sort(
+            "data.TransactionDT", 1
+        )
+        return [doc["data"] for doc in documents]
 
     def save_prediction(
         self,
