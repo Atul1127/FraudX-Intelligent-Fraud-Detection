@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import yaml
@@ -47,8 +46,13 @@ def main() -> None:
         print("Loading cached features...")
         X_train, y_train = load_processed(proc / "features_train.pkl")
         X_val, y_val = load_processed(proc / "features_val.pkl")
-        print("  Cached features do not contain raw category mappings.")
-        print("  Use --force-preprocess to rebuild the feature metadata for online serving.")
+
+        # The cached matrix is safe to reuse, but online inference still needs
+        # the category vocabulary that produced the original numeric codes.
+        print("Loading raw data to recover categorical mappings for serving...")
+        raw_for_metadata = load_raw(cfg)
+        category_mappings = fit_category_mappings(raw_for_metadata)
+        print(f"  Recovered mappings for {len(category_mappings)} categorical columns.")
     else:
         print("Loading raw data...")
         df = load_raw(cfg)
