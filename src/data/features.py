@@ -118,16 +118,36 @@ def drop_id_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["TransactionID"], errors="ignore")
 
 
-def encode_categoricals(df: pd.DataFrame) -> pd.DataFrame:
+def fit_category_mappings(df: pd.DataFrame) -> dict[str, list]:
+    """Persist the exact pandas categorical ordering used during training."""
+    mappings: dict[str, list] = {}
+    for col in df.select_dtypes(include=["object", "string", "category"]).columns:
+        categorical = pd.Categorical(df[col])
+        mappings[col] = categorical.categories.tolist()
+    return mappings
+
+
+def encode_categoricals(
+    df: pd.DataFrame,
+    category_mappings: dict[str, list] | None = None,
+) -> pd.DataFrame:
     df = df.copy()
     categorical_cols = df.select_dtypes(include=["object", "string", "category"]).columns
     for col in categorical_cols:
-        df[col] = pd.Categorical(df[col]).codes.astype(float)
+        if category_mappings and col in category_mappings:
+            categorical = pd.Categorical(df[col], categories=category_mappings[col])
+            df[col] = categorical.codes.astype(float)
+        else:
+            df[col] = pd.Categorical(df[col]).codes.astype(float)
         df[col] = df[col].replace(-1, np.nan)
     return df
 
 
-def build_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+def build_features(
+    df: pd.DataFrame,
+    cfg: dict,
+    category_mappings: dict[str, list] | None = None,
+) -> pd.DataFrame:
     """Build deterministic, time-ordered features without future-row counts."""
     df = df.copy().sort_values("TransactionDT").reset_index(drop=True)
     features_cfg = cfg.get("features", {})
@@ -151,7 +171,7 @@ def build_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df = encode_match_features(df)
     df = select_v_features(df, keep=50)
     df = drop_id_cols(df)
-    return encode_categoricals(df)
+    return encode_categoricals(df, category_mappings=category_mappings)
 
 
 def apply_smote(
