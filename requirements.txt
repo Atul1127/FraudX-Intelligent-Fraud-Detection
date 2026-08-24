@@ -17,3 +17,4 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.9
 pymongo>=4.8
+mlflow>=3.0
