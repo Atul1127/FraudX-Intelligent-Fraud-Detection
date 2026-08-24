@@ -3,10 +3,10 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any
 
-import pandas as pd
 from fastapi import FastAPI, HTTPException
 
 from api.dependencies import load_model
+from api.feature_store import OnlineFeatureStore
 from api.mongodb import MongoStore
 from api.schemas import (
     HealthResponse,
@@ -19,28 +19,31 @@ from api.schemas import (
 model = None
 cfg: dict[str, Any] = {}
 mongo = MongoStore()
+feature_store: OnlineFeatureStore | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global model, cfg
+    global model, cfg, feature_store
     try:
         model, cfg = load_model()
     except FileNotFoundError:
         model, cfg = None, {}
 
-    # MongoDB is optional during local development; the API remains available
-    # when the database is not running.
+    # MongoDB is required for raw online scoring because historical features
+    # must be built from prior transactions before inference.
     mongo.connect()
+    feature_store = OnlineFeatureStore(mongo, cfg) if model is not None else None
     yield
     mongo.close()
+    feature_store = None
     model = None
 
 
 app = FastAPI(
     title="FraudX API",
     description="Production-oriented fraud detection inference API.",
-    version="1.1.0",
+    version="1.2.0",
     lifespan=lifespan,
 )
 
@@ -50,6 +53,15 @@ def _require_model():
         raise HTTPException(
             status_code=503,
             detail="Model checkpoint is not available. Train FraudX before serving predictions.",
+        )
+
+
+def _require_online_serving():
+    _require_model()
+    if not mongo.connected or feature_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="MongoDB is required for online historical feature construction.",
         )
 
 
@@ -76,27 +88,18 @@ def model_info() -> ModelInfoResponse:
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: TransactionRequest) -> PredictionResponse:
-    """Score a transaction and persist the transaction/prediction when MongoDB is available.
+    """Score a raw transaction using MongoDB-backed historical features."""
+    _require_online_serving()
 
-    Historical feature construction is intentionally not performed here yet.
-    The next serving step will use MongoDB-backed transaction history to build
-    causal velocity/frequency features before inference.
-    """
-    _require_model()
+    try:
+        row = feature_store.build(request.data, model)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Feature construction failed: {exc}") from exc
 
-    row = pd.DataFrame([request.data])
-    missing = [name for name in model.feature_names or [] if name not in row.columns]
-    if missing:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Payload is missing model features.",
-                "missing_features": missing[:50],
-                "missing_count": len(missing),
-            },
-        )
-
-    row = row[model.feature_names]
     try:
         probability = float(model.predict_proba(row)[0])
     except Exception as exc:
@@ -105,29 +108,26 @@ def predict(request: TransactionRequest) -> PredictionResponse:
     threshold = float(cfg.get("ensemble", {}).get("default_threshold", 0.5))
     prediction = int(probability >= threshold)
     model_version = "local-checkpoint"
-    persisted = False
 
-    if mongo.connected:
-        try:
-            mongo.save_transaction(request.transaction_id, request.data)
-            mongo.save_prediction(
-                request.transaction_id,
-                probability,
-                prediction,
-                threshold,
-                model_version,
-            )
-            mongo.save_audit(
-                "prediction",
-                {
-                    "transaction_id": request.transaction_id,
-                    "prediction": prediction,
-                    "model_version": model_version,
-                },
-            )
-            persisted = True
-        except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"MongoDB persistence failed: {exc}") from exc
+    try:
+        mongo.save_transaction(request.transaction_id, request.data)
+        mongo.save_prediction(
+            request.transaction_id,
+            probability,
+            prediction,
+            threshold,
+            model_version,
+        )
+        mongo.save_audit(
+            "prediction",
+            {
+                "transaction_id": request.transaction_id,
+                "prediction": prediction,
+                "model_version": model_version,
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"MongoDB persistence failed: {exc}") from exc
 
     return PredictionResponse(
         transaction_id=request.transaction_id,
@@ -135,5 +135,5 @@ def predict(request: TransactionRequest) -> PredictionResponse:
         prediction=prediction,
         threshold=threshold,
         model_version=model_version,
-        persisted=persisted,
+        persisted=True,
     )
