@@ -20,3 +20,19 @@ def test_prediction_shift_detects_distribution_change():
     result = prediction_shift(reference, current)
     assert result["psi"] > 0.25
     assert result["level"] == "drift"
+
+
+def test_psi_rejects_empty_samples():
+    try:
+        psi([], [0.1, 0.2])
+        assert False, "Expected ValueError"
+    except ValueError as exc:
+        assert "both contain numeric values" in str(exc)
+
+
+def test_psi_rejects_invalid_bin_count():
+    try:
+        psi([0.1, 0.2], [0.1, 0.2], bins=1)
+        assert False, "Expected ValueError"
+    except ValueError as exc:
+        assert "at least 2" in str(exc)
