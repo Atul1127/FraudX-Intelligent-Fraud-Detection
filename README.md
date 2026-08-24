@@ -1,6 +1,6 @@
 # FraudX — Intelligent Fraud Detection Platform
 
-> **End-to-end, time-aware fraud detection with ensemble ML, online historical features, explainability, experiment tracking, API serving, Docker, and CI/CD.**
+> **End-to-end, time-aware fraud detection with ensemble ML, online historical features, explainability, experiment tracking, API serving, monitoring, Docker, and CI/CD.**
 
 [![CI](https://github.com/Atul1127/FraudX-Intelligent-Fraud-Detection/actions/workflows/ci.yml/badge.svg)](https://github.com/Atul1127/FraudX-Intelligent-Fraud-Detection/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
@@ -10,7 +10,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?logo=githubactions&logoColor=white)
 
-FraudX is a production-style fraud detection platform built on the IEEE-CIS Fraud Detection dataset. The project combines **chronological validation, leakage-conscious feature engineering, imbalanced learning, XGBoost/LightGBM/CatBoost ensembles, Optuna tuning, threshold optimization, SHAP explainability, MongoDB-backed historical features, FastAPI inference, MLflow tracking, Docker Compose, and GitHub Actions CI/CD**.
+FraudX is a production-style fraud detection platform built on the IEEE-CIS Fraud Detection dataset. It combines **chronological validation, leakage-conscious feature engineering, imbalanced learning, XGBoost/LightGBM/CatBoost ensembles, Optuna tuning, threshold optimization, SHAP explainability, MongoDB-backed historical features, FastAPI inference, MLflow tracking, prediction/feature drift monitoring, Docker Compose, and GitHub Actions CI/CD**.
 
 ---
 
@@ -20,85 +20,82 @@ FraudX is a production-style fraud detection platform built on the IEEE-CIS Frau
 - **0.8921 ROC-AUC**, **0.4857 PR-AUC**, and **0.5081 F1** from the final tuned weighted ensemble.
 - Ensemble F1 improved by approximately **8.5%** after Optuna tuning (**0.4681 → 0.5081**).
 - A separate chronological stacking experiment reached **0.9177 ROC-AUC / 0.5445 PR-AUC**.
-- **8/8 automated tests passing** in the verified local suite.
-- Real-time inference exposed through **FastAPI** with MongoDB persistence and historical feature retrieval.
-- Experiment parameters, metrics, reports, and model artifacts tracked with **MLflow**.
-- Full local stack containerized with **Docker Compose** and validated through **GitHub Actions**.
+- **18 automated tests passing** in the verified local suite.
+- Real-time inference through **FastAPI** with MongoDB-backed historical features and prediction persistence.
+- **MLflow** tracks model parameters, metrics, reports, and artifacts.
+- **PSI-based monitoring** detects prediction-score and online numeric-feature distribution shifts.
+- Complete local stack containerized with **Docker Compose** and validated through **GitHub Actions**.
 
 ---
 
-## Architecture
+# Architecture
 
 ```text
-                         ┌──────────────────────┐
-                         │     GitHub Push       │
-                         └──────────┬───────────┘
-                                    │
-                              GitHub Actions
-                                    │
-                         ┌──────────▼───────────┐
-                         │ Tests + Docker Build │
-                         └──────────┬───────────┘
-                                    │
-             ┌──────────────────────┴──────────────────────┐
-             │                                             │
-             ▼                                             ▼
-      ┌───────────────┐                            ┌────────────────┐
-      │ Training      │                            │ FastAPI        │
-      │ Pipeline      │                            │ Inference API  │
-      └───────┬───────┘                            └───────┬────────┘
-              │                                            │
-              ▼                                            ▼
-     ┌─────────────────┐                          ┌─────────────────┐
-     │ Feature         │                          │ MongoDB         │
-     │ Engineering     │◄────────────────────────►│ Historical Data │
-     └────────┬────────┘                          └─────────────────┘
-              │
-              ▼
-      Chronological Split
-              │
-              ▼
-        Training Only
-           SMOTE
-              │
-       ┌──────┼──────┐
-       ▼      ▼      ▼
-    XGBoost LightGBM CatBoost
-       └──────┼──────┘
-              ▼
-       Weighted Ensemble
-              │
-              ▼
-      Threshold Optimization
-              │
-              ▼
-       Fraud Probability
-              │
-       ┌──────┴──────┐
-       ▼             ▼
-     SHAP        MongoDB
-  Explanation    Prediction Log
+                    GitHub Push / PR
+                           │
+                    GitHub Actions
+                    ┌──────┴──────┐
+                    │ Tests + CI  │
+                    │ Docker Build│
+                    └──────┬──────┘
+                           │
+          ┌────────────────┴────────────────┐
+          │                                 │
+          ▼                                 ▼
+   Training Pipeline                    FastAPI :8001
+          │                                 │
+          ▼                                 ▼
+ Feature Engineering                    MongoDB :27017
+          │                                 │
+          ▼                                 │
+ Chronological Split                       │
+          │                                 │
+          ▼                                 │
+ Training-only SMOTE                       │
+          │                                 │
+    ┌─────┼─────┐                           │
+    ▼     ▼     ▼                           │
+   XGB   LGBM  CatBoost                     │
+    └─────┼─────┘                           │
+          ▼                                 │
+  Weighted Ensemble ◄───────────────────────┘
+          │
+          ▼
+ Threshold Optimization
+          │
+          ▼
+ Fraud Probability
+          │
+     ┌────┴────┐
+     ▼         ▼
+   SHAP     Persistence
+               │
+               ▼
+        Drift Monitoring
+               │
+               ▼
+      stable / warning / drift
 
-              ┌──────────────────┐
-              │      MLflow      │
-              │ Runs / Metrics / │
-              │ Artifacts        │
-              └──────────────────┘
+          ┌──────────────┐
+          │    MLflow    │
+          │ Runs/Metrics │
+          │  Artifacts   │
+          └──────────────┘
 ```
 
 ### Runtime services
 
 | Service | Purpose | Host Port |
 |---|---|---:|
-| **FraudX API** | Real-time fraud scoring | `8001` |
-| **MongoDB** | Historical transactions / prediction persistence | `27017` |
+| **FraudX API** | Real-time fraud scoring and monitoring | `8001` |
+| **MongoDB** | Historical transactions and prediction persistence | `27017` |
 | **MLflow** | Experiment tracking and artifacts | `5000` |
 
-> Port `8001` is intentional so FraudX can coexist with other local applications using port `8000`.
+Port `8001` is used intentionally so FraudX can coexist with applications using port `8000`.
 
 ---
 
-## Core Capabilities
+# Core Capabilities
 
 | Capability | Implementation |
 |---|---|
@@ -111,6 +108,7 @@ FraudX is a production-style fraud detection platform built on the IEEE-CIS Frau
 | Online historical features | MongoDB |
 | Model serving | FastAPI + Uvicorn |
 | Experiment tracking | MLflow |
+| Drift monitoring | PSI for prediction scores and online numeric features |
 | Containerization | Docker + Docker Compose |
 | Automated validation | Pytest |
 | CI/CD | GitHub Actions |
@@ -120,7 +118,7 @@ FraudX is a production-style fraud detection platform built on the IEEE-CIS Frau
 
 # Model Performance
 
-### Final tuned temporal evaluation
+## Final tuned temporal evaluation
 
 The primary benchmark uses chronological validation: earlier transactions are used for training and later transactions are held out for validation.
 
@@ -134,13 +132,9 @@ The primary benchmark uses chronological validation: earlier transactions are us
 **Best ensemble threshold:** `0.426`  
 **Precision:** `0.5725` · **Recall:** `0.4567` · **F1:** `0.5081`
 
-FraudX applies SMOTE only to the training split, leaving the chronological validation period untouched.
+SMOTE is applied only to the training split; the chronological validation period remains untouched.
 
-### Why PR-AUC matters
-
-Fraud detection is an imbalanced classification problem. ROC-AUC is useful, but **PR-AUC, precision, recall, and F1** provide a more informative view of minority-class performance.
-
-### Optuna improvement
+## Optuna improvement
 
 | Metric | Before tuning | After tuning |
 |---|---:|---:|
@@ -148,9 +142,9 @@ Fraud detection is an imbalanced classification problem. ROC-AUC is useful, but 
 | PR-AUC | 0.4726 | **0.4857** |
 | F1 | 0.4681 | **0.5081** |
 
-### Separate stacking experiment
+## Separate stacking experiment
 
-A chronological stacking experiment is retained separately rather than silently replacing the default ensemble.
+A chronological stacking experiment is retained separately from the default production path.
 
 | Metric | Stacking |
 |---|---:|
@@ -159,7 +153,7 @@ A chronological stacking experiment is retained separately rather than silently 
 | F1 | 0.4875 |
 | Threshold | 0.810 |
 
-> Results can vary with library versions, cached artifacts, configuration, and feature changes. The weighted ensemble remains the project's default production path.
+> Results can vary with library versions, cached artifacts, configuration, and feature changes. The weighted ensemble remains the default serving path.
 
 ---
 
@@ -222,20 +216,13 @@ FraudX generates transaction-level signals including:
 - Selected Vesta features based on missingness.
 - Missing-value-aware categorical encoding.
 
-Time-dependent count features are calculated in transaction order and do not use future rows. This is critical for avoiding temporal leakage.
+Time-dependent count features are calculated in transaction order and do not use future rows, reducing temporal leakage risk.
 
 ## Imbalanced Learning
 
-Fraud transactions are heavily underrepresented. FraudX applies **SMOTE only to the training split**, while validation remains untouched. The boosting models also use class-balancing mechanisms.
+FraudX applies **SMOTE only to the training split**, while validation remains untouched. The boosting models also use class-balancing mechanisms.
 
-```text
-Training data ──► SMOTE ──► Model fitting
-Validation    ─────────────────► Evaluation
-```
-
-## Model Ensemble
-
-The default ensemble combines three complementary gradient-boosting learners:
+## Ensemble
 
 ```text
 XGBoost  ── 35% ──┐
@@ -243,13 +230,13 @@ LightGBM ── 35% ──┼──► Fraud Probability
 CatBoost ── 30% ──┘
 ```
 
-Optuna searches a compact hyperparameter space using **PR-AUC** as the optimization objective. The decision threshold is optimized on validation data and persisted in configuration.
+Optuna optimizes PR-AUC and the decision threshold is selected on validation data.
 
 ---
 
-# Online Feature Store with MongoDB
+# Online Features with MongoDB
 
-FraudX does not treat MongoDB as a generic database add-on. It provides historical context during online inference.
+MongoDB provides historical context during online inference rather than acting only as a persistence layer.
 
 ```text
 Incoming transaction
@@ -270,16 +257,14 @@ Model preprocessing
 Ensemble prediction
         │
         ▼
-Persist prediction + transaction
+Persist transaction + prediction
 ```
 
-Historical queries use earlier transactions rather than future records, preserving the temporal nature of the feature pipeline.
+Historical queries use earlier transactions, preserving the temporal nature of the feature pipeline.
 
 ---
 
-# FastAPI Inference API
-
-FraudX exposes the trained ensemble through a REST API.
+# FastAPI
 
 ## Swagger
 
@@ -287,25 +272,17 @@ After starting Docker Compose:
 
 **http://127.0.0.1:8001/docs**
 
-## Health check
+## Endpoints
 
-```http
-GET /health
-```
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Service/model/MongoDB health |
+| `GET` | `/model/info` | Model version, threshold, weights, feature count |
+| `GET` | `/monitoring/predictions` | Prediction volume, fraud rate and score drift |
+| `GET` | `/monitoring/features` | Online numeric-feature distribution drift |
+| `POST` | `/predict` | Score and persist a transaction |
 
-Expected response:
-
-```json
-{
-  "status": "ok",
-  "model_loaded": true,
-  "mongodb_connected": true
-}
-```
-
-## Prediction
-
-Example request:
+### Example prediction request
 
 ```json
 {
@@ -339,11 +316,49 @@ Example response from the verified local deployment:
 }
 ```
 
-A later transaction with historical context produced a different probability, demonstrating that the online historical feature path is active.
+---
+
+# Drift Monitoring
+
+FraudX includes a lightweight production-style monitoring layer based on **Population Stability Index (PSI)**.
+
+### Prediction monitoring
+
+```http
+GET /monitoring/predictions?window_hours=24
+```
+
+Tracks:
+
+- Prediction volume.
+- Fraud prediction rate.
+- Average fraud probability.
+- Current vs previous prediction-score distribution.
+- PSI drift level.
+
+### Feature monitoring
+
+```http
+GET /monitoring/features?window_hours=24
+```
+
+Compares online numeric feature distributions across adjacent time windows.
+
+### PSI interpretation
+
+| PSI | Status |
+|---:|---|
+| `< 0.10` | Stable |
+| `0.10–0.25` | Warning |
+| `>= 0.25` | Drift |
+
+The monitoring endpoints return `insufficient_data` until both comparison windows contain enough observations.
+
+See [`docs/MONITORING.md`](docs/MONITORING.md) for implementation details and limitations.
 
 ---
 
-# MLflow Experiment Tracking
+# MLflow
 
 FraudX tracks training runs with MLflow.
 
@@ -352,11 +367,7 @@ FraudX tracks training runs with MLflow.
 Tracked information includes:
 
 - Model parameters.
-- ROC-AUC.
-- PR-AUC.
-- Precision.
-- Recall.
-- F1.
+- ROC-AUC, PR-AUC, precision, recall and F1.
 - Optimized threshold.
 - Training reports.
 - Model checkpoint artifacts.
@@ -373,17 +384,17 @@ F1             0.5081
 Threshold      0.4257
 ```
 
-Local MLflow uses SQLite for run metadata and persistent local artifact storage.
+MLflow is containerized locally with a pinned `mlflow==3.15.1` image build and SQLite-backed tracking metadata.
 
-Launch the UI with the project's configured MLflow setup and open:
+Open the local UI at:
 
 **http://127.0.0.1:5000**
 
 ---
 
-# Dockerized Deployment
+# Docker Deployment
 
-FraudX runs as a multi-service Docker Compose stack:
+FraudX runs as three local services:
 
 ```text
 ┌─────────────────────────────────────────────┐
@@ -396,9 +407,9 @@ FraudX runs as a multi-service Docker Compose stack:
 └─────────────────────────────────────────────┘
 ```
 
-The API image includes the Linux OpenMP runtime required by LightGBM/XGBoost.
+The API image includes the Linux OpenMP runtime required by LightGBM/XGBoost. MLflow is built locally from `Dockerfile.mlflow`, avoiding a runtime dependency on an external MLflow container registry.
 
-### Start the stack
+### Start
 
 ```bash
 git clone https://github.com/Atul1127/FraudX-Intelligent-Fraud-Detection.git
@@ -406,19 +417,27 @@ cd FraudX-Intelligent-Fraud-Detection
 docker compose up --build -d
 ```
 
-### Check services
+### Check
 
 ```bash
 docker compose ps
 ```
 
-### Stop services
+Expected services:
+
+```text
+fraudx-api       Up
+fraudx-mlflow    Up (healthy)
+fraudx-mongodb   Up (healthy)
+```
+
+### Stop
 
 ```bash
 docker compose down
 ```
 
-### Endpoints
+### Local endpoints
 
 | Service | URL |
 |---|---|
@@ -431,57 +450,42 @@ docker compose down
 
 # CI/CD
 
-GitHub Actions validates the repository on pushes and pull requests to `main`.
+GitHub Actions runs on pushes and pull requests to `main`.
 
 ```text
-Git Push / Pull Request
-          │
-          ▼
-   Checkout Repository
-          │
-          ▼
-     Python 3.12
-          │
-          ▼
-  Install Dependencies
-          │
-          ▼
-    Compile Sources
-          │
-          ▼
-      Run Pytest
-          │
-          ▼
- Validate Docker Compose
-          │
-          ▼
-    Build Docker Image
-          │
-          ▼
-         PASS
+Push / Pull Request
+        │
+        ▼
+Checkout → Python 3.12 → Install dependencies
+        │
+        ▼
+Compile sources → Pytest → Docker Compose validation
+        │
+        ▼
+Docker Build
+        │
+        └── main push → publish FraudX API image to GHCR
 ```
 
-The workflow also publishes the Docker image to GitHub Container Registry when the CI/CD path succeeds.
+The workflow also uses GitHub Actions cache for Docker builds.
 
 ---
 
 # Testing
 
-The project includes automated tests covering important ML contracts:
+The automated suite covers:
 
 - Temporal ordering and train/validation separation.
 - Historical frequency and transaction-time feature behavior.
 - Numeric feature output after preprocessing.
-- Evaluation metric and threshold contracts.
+- Evaluation metrics and threshold contracts.
 - Ensemble probability shape and bounds.
-- API/project configuration validation.
-- Docker Compose configuration validation in CI.
+- API/project configuration.
+- MongoDB/online feature behavior.
+- Drift/PSI calculations.
+- Docker Compose configuration.
 
-Current verified local suite:
-
-```text
-8 passed
-```
+**Verified local result: `18 passed`.**
 
 Run locally:
 
@@ -493,36 +497,26 @@ pytest -q
 
 # Explainability
 
-SHAP is integrated for model interpretation.
-
-The project supports:
+SHAP is integrated for model interpretation, including:
 
 - Global feature importance.
 - Per-transaction explanations.
 - Waterfall-style explanations.
 - Feature contribution analysis.
 
-The goal is not only to predict fraud, but also to provide evidence for **why a transaction received a high fraud score**.
+The objective is not only to predict fraud but also to provide evidence for why a transaction received a high fraud score.
 
 ---
 
 # Streamlit Dashboard
 
-The repository also contains an interactive Streamlit application for model exploration and explainability.
+Run the interactive analysis dashboard with:
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-The dashboard provides:
-
-- Transaction scoring.
-- Fraud probability and optimized threshold.
-- SHAP explanations.
-- ROC and PR curves.
-- Confusion matrix.
-- Feature importance.
-- Interactive threshold analysis.
+The dashboard supports transaction scoring, fraud probability inspection, SHAP explanations, ROC/PR curves, confusion matrices, feature importance, and threshold analysis.
 
 ---
 
@@ -531,24 +525,29 @@ The dashboard provides:
 ```text
 FraudX-Intelligent-Fraud-Detection/
 │
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── aws-deploy.yml
+├── .github/workflows/
+│   └── ci.yml
 │
 ├── api/
+│   ├── dependencies.py
+│   ├── feature_store.py
 │   ├── main.py
-│   └── dependencies.py
+│   ├── mongodb.py
+│   └── schemas.py
 │
 ├── app/
 │   ├── streamlit_app.py
 │   ├── utils.py
 │   └── components/
 │
+├── docs/
+│   └── MONITORING.md
+│
 ├── src/
 │   ├── data/
 │   ├── features/
 │   ├── models/
+│   ├── monitoring/
 │   ├── evaluate.py
 │   ├── explain.py
 │   ├── mlflow_tracker.py
@@ -560,12 +559,14 @@ FraudX-Intelligent-Fraud-Detection/
 ├── config.yaml
 ├── requirements.txt
 ├── Dockerfile
+├── Dockerfile.mlflow
 ├── docker-compose.yml
+├── pytest.ini
 ├── train.py
 └── README.md
 ```
 
-Large datasets, generated artifacts, and local databases are intentionally excluded from Git.
+Large datasets, generated artifacts, local databases, and secrets are intentionally excluded from Git.
 
 ---
 
@@ -577,9 +578,9 @@ Large datasets, generated artifacts, and local databases are intentionally exclu
 pip install -r requirements.txt
 ```
 
-## Download IEEE-CIS data
+## Dataset
 
-Download the competition files from Kaggle and place them under:
+Download the IEEE-CIS Fraud Detection competition files from Kaggle and place them under:
 
 ```text
 data/raw/
@@ -589,17 +590,15 @@ data/raw/
 └── test_identity.csv
 ```
 
-The dataset is not included because of its size and Kaggle distribution restrictions.
+The dataset is not included because of its size and distribution restrictions.
 
-## Train the main ensemble
+## Train
 
 ```bash
 python train.py
 ```
 
-The pipeline reuses cached processed features when available and writes model checkpoints plus a training report under the configured model directory.
-
-## Tune models
+## Tune
 
 ```bash
 python src/tune.py
@@ -607,13 +606,13 @@ python src/tune.py
 
 Optuna optimizes PR-AUC using an inner chronological validation split so the final validation period is not used for hyperparameter selection.
 
-## Run stacking experiment
+## Stacking experiment
 
 ```bash
 python src/stacking.py
 ```
 
-## Run random benchmark
+## Random benchmark
 
 ```bash
 python -m src.benchmark_random
@@ -621,7 +620,7 @@ python -m src.benchmark_random
 
 The random benchmark is comparison-only; temporal validation remains the primary evaluation protocol.
 
-## Run tests
+## Tests
 
 ```bash
 pytest -q
@@ -640,15 +639,9 @@ Earlier transactions ─────────────► Later transactio
         TRAIN                           VALIDATION
 ```
 
-The random benchmark is retained only to quantify the difference between conventional and time-aware validation.
-
 ---
 
 # Technology Stack
-
-### Programming
-
-Python
 
 ### Machine Learning
 
@@ -668,7 +661,7 @@ MongoDB
 
 ### MLOps
 
-MLflow · Docker · Docker Compose · GitHub Actions · GitHub Container Registry
+MLflow · Docker · Docker Compose · GitHub Actions · GitHub Container Registry · PSI monitoring
 
 ### Visualization
 
@@ -680,48 +673,42 @@ Streamlit · Matplotlib · Seaborn
 
 ### Why an ensemble?
 
-XGBoost, LightGBM, and CatBoost have different tree-growing and optimization characteristics. Combining their probabilities can improve robustness over relying on a single learner.
+XGBoost, LightGBM, and CatBoost have different optimization characteristics. Combining their probabilities provides a robust default compared with relying on a single learner.
 
 ### Why optimize the threshold?
 
-A default probability threshold of `0.5` is not necessarily appropriate for an imbalanced fraud problem. FraudX selects a validation threshold based on the project's evaluation objective instead.
+A default probability threshold of `0.5` is not necessarily appropriate for an imbalanced fraud problem. FraudX selects a validation threshold based on the project's evaluation objective.
 
 ### Why MongoDB?
 
-The online inference path needs historical transaction context. MongoDB provides a simple persistence layer for retrieving earlier transactions and storing predictions.
+Online inference needs historical transaction context. MongoDB provides persistence for retrieving earlier transactions and storing predictions.
 
 ### Why MLflow?
 
-Fraud detection experiments involve many model, feature, threshold, and preprocessing choices. MLflow provides reproducible run-level tracking instead of relying on manually recorded results.
+Fraud detection experiments involve many model, feature, threshold, and preprocessing choices. MLflow provides reproducible run-level tracking instead of manual experiment notes.
 
-### Why Docker?
+### Why monitoring?
 
-Docker makes the API, database, and experiment-tracking environment reproducible across machines and simplifies local deployment.
+A model can remain healthy in code while its production input or score distribution changes. PSI-based monitoring provides a lightweight signal for when investigation may be warranted.
 
-### Why no Kubernetes?
+### Why no AWS or Kubernetes?
 
-FraudX is intentionally scoped as a single-service ML platform with supporting infrastructure. Kubernetes would add operational complexity without being required by the current workload. It is better treated as a separate MLOps learning project than forced into this system.
-
-### Why no AWS?
-
-The project is designed to demonstrate the complete ML-to-serving-to-MLOps workflow locally. Cloud deployment is intentionally optional rather than adding infrastructure solely for a resume keyword.
+FraudX is intentionally scoped as a local production-style ML platform. AWS and Kubernetes would add infrastructure complexity without being required to demonstrate the core ML-to-serving-to-MLOps workflow. They are better treated as separate deployment/MLOps learning projects rather than forced into this repository.
 
 ---
 
 # Future Improvements
 
-Potential next iterations include:
+Possible next iterations, if the project is ever extended:
 
-- Prediction drift monitoring.
-- Feature distribution monitoring.
 - Prometheus/Grafana observability.
 - Kafka-based streaming ingestion.
-- Batch inference jobs.
-- Model registry promotion workflows.
 - Automated retraining triggers.
+- Model registry promotion workflows.
 - Additional calibration experiments.
+- More comprehensive reference-data monitoring.
 
-These are deliberately separated from the current stable production-style path.
+These are optional extensions; the current repository is considered complete for its portfolio scope.
 
 ---
 
@@ -729,15 +716,13 @@ These are deliberately separated from the current stable production-style path.
 
 **FraudX — Intelligent Fraud Detection Platform**
 
-Built an end-to-end fraud detection platform using an ensemble of XGBoost, LightGBM, and CatBoost with Optuna hyperparameter optimization, SHAP explainability, time-aware validation, and threshold optimization; achieved **0.892 ROC-AUC / 0.486 PR-AUC** on chronological validation. Developed a **FastAPI** inference service with **MongoDB-backed historical features and prediction persistence**, integrated **MLflow** for experiment tracking and model artifacts, containerized the platform with **Docker Compose**, and automated testing and image builds through **GitHub Actions CI/CD**.
+Built an end-to-end fraud detection platform using XGBoost, LightGBM, and CatBoost with Optuna hyperparameter optimization, SHAP explainability, time-aware validation, threshold optimization, and imbalance handling; achieved **0.892 ROC-AUC / 0.486 PR-AUC** on chronological validation. Developed a **FastAPI** inference service with **MongoDB-backed historical features and prediction persistence**, integrated **MLflow** for experiment tracking, added **PSI-based drift monitoring**, containerized the system with **Docker Compose**, and automated testing and Docker builds through **GitHub Actions CI/CD**.
 
 ---
 
 ## License
 
 This project is intended for educational and portfolio use. Review the IEEE-CIS dataset's original competition terms before redistributing any dataset files.
-
----
 
 ## Author
 
