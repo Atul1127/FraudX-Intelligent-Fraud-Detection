@@ -23,7 +23,10 @@ def test_required_project_files_exist():
         "train.py",
         "api/main.py",
         "api/dependencies.py",
+        "api/mongodb.py",
         "src/models/ensemble.py",
+        "src/monitoring/drift.py",
+        "tests/test_monitoring.py",
     ]
 
     for relative_path in required:
