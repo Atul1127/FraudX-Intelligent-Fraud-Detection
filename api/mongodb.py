@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pymongo import MongoClient
@@ -83,12 +83,7 @@ class MongoStore:
         frequency_columns: list[str],
         max_window: int,
     ) -> list[dict[str, Any]]:
-        """Fetch recent history relevant to the incoming transaction.
-
-        The query returns rows sharing at least one configured frequency key,
-        plus the time range needed by the largest velocity window. MongoDB's
-        indexes keep these equality/time lookups bounded as the store grows.
-        """
+        """Fetch recent history relevant to the incoming transaction."""
         collection = self._collection("transactions")
         transaction_dt = transaction.get("TransactionDT")
         if transaction_dt is None:
@@ -106,7 +101,6 @@ class MongoStore:
                 "$gte": max(0, transaction_dt - max_window),
             }
         }
-
         query: dict[str, Any]
         if clauses:
             query = {"$and": [time_filter, {"$or": clauses}]}
@@ -136,6 +130,38 @@ class MongoStore:
                 "created_at": datetime.now(timezone.utc),
             }
         )
+
+    def get_prediction_monitoring(self, window_hours: int = 24) -> dict[str, Any]:
+        """Return current/previous prediction-window statistics for monitoring."""
+        if window_hours < 1:
+            raise ValueError("window_hours must be at least 1")
+        collection = self._collection("predictions")
+        now = datetime.now(timezone.utc)
+        current_start = now - timedelta(hours=window_hours)
+        previous_start = current_start - timedelta(hours=window_hours)
+
+        def read(start: datetime, end: datetime) -> list[dict[str, Any]]:
+            return list(
+                collection.find(
+                    {"created_at": {"$gte": start, "$lt": end}},
+                    {"_id": 0, "fraud_probability": 1, "prediction": 1},
+                )
+            )
+
+        current = read(current_start, now)
+        previous = read(previous_start, current_start)
+
+        def stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
+            probabilities = [float(row["fraud_probability"]) for row in rows]
+            predictions = [int(row["prediction"]) for row in rows]
+            return {
+                "count": len(rows),
+                "avg_probability": sum(probabilities) / len(probabilities) if probabilities else None,
+                "fraud_rate": sum(predictions) / len(predictions) if predictions else None,
+                "probabilities": probabilities,
+            }
+
+        return {"current": stats(current), "previous": stats(previous)}
 
     def save_audit(self, action: str, details: dict[str, Any]) -> None:
         self._collection("audit_logs").insert_one(
