@@ -36,24 +36,31 @@ def main() -> None:
         load_processed,
         processed_exists,
     )
-    from src.data.features import build_features, apply_smote
+    from src.data.features import build_features, apply_smote, fit_category_mappings
     from src.train import Trainer
 
     proc = Path(cfg["data"]["processed_dir"])
     target = cfg["features"]["target_col"]
+    category_mappings = {}
 
     if not args.force_preprocess and processed_exists(cfg):
         print("Loading cached features...")
         X_train, y_train = load_processed(proc / "features_train.pkl")
         X_val, y_val = load_processed(proc / "features_val.pkl")
+        print("  Cached features do not contain raw category mappings.")
+        print("  Use --force-preprocess to rebuild the feature metadata for online serving.")
     else:
         print("Loading raw data...")
         df = load_raw(cfg)
         print(f"  Loaded {len(df):,} rows, {df.shape[1]} columns")
         print(f"  Fraud rate: {df[target].mean():.4f}")
 
+        print("Fitting categorical mappings...")
+        category_mappings = fit_category_mappings(df)
+        print(f"  Saved mappings for {len(category_mappings)} categorical columns.")
+
         print("Engineering features...")
-        df_feat = build_features(df, cfg)
+        df_feat = build_features(df, cfg, category_mappings=category_mappings)
         print(f"  Feature matrix: {df_feat.shape}")
 
         X_train, X_val, y_train, y_val = train_val_split(df_feat, cfg)
@@ -69,6 +76,7 @@ def main() -> None:
 
     print("\nTraining ensemble...")
     trainer = Trainer(cfg)
+    trainer.set_category_mappings(category_mappings)
     report = trainer.run(X_train, y_train, X_val, y_val)
 
     ckpt_dir = Path("models/checkpoints")
