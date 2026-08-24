@@ -8,6 +8,7 @@ import mlflow
 
 
 EXPERIMENT_NAME = "FraudX-Fraud-Detection"
+DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
 
 
 def _flatten_params(value: Any, prefix: str = "") -> dict[str, str]:
@@ -25,8 +26,14 @@ def _flatten_params(value: Any, prefix: str = "") -> dict[str, str]:
 
 
 def start_run(cfg: dict) -> Any:
+    """Start an MLflow run using a database-backed local tracking store.
+
+    MLflow versions that no longer support the legacy file-store backend can
+    use SQLite for local development while keeping artifacts on the local
+    filesystem.
+    """
     mlflow_cfg = cfg.get("mlflow", {})
-    tracking_uri = mlflow_cfg.get("tracking_uri", "file:./mlruns")
+    tracking_uri = mlflow_cfg.get("tracking_uri", DEFAULT_TRACKING_URI)
     experiment_name = mlflow_cfg.get("experiment_name", EXPERIMENT_NAME)
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
