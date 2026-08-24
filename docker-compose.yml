@@ -21,7 +21,7 @@ services:
     container_name: fraudx-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: fraudx
