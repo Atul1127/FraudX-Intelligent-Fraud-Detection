@@ -7,6 +7,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 
 from api.dependencies import load_model
+from api.mongodb import MongoStore
 from api.schemas import (
     HealthResponse,
     ModelInfoResponse,
@@ -17,6 +18,7 @@ from api.schemas import (
 
 model = None
 cfg: dict[str, Any] = {}
+mongo = MongoStore()
 
 
 @asynccontextmanager
@@ -25,16 +27,20 @@ async def lifespan(app: FastAPI):
     try:
         model, cfg = load_model()
     except FileNotFoundError:
-        # The API can still start before a trained checkpoint exists.
         model, cfg = None, {}
+
+    # MongoDB is optional during local development; the API remains available
+    # when the database is not running.
+    mongo.connect()
     yield
+    mongo.close()
     model = None
 
 
 app = FastAPI(
     title="FraudX API",
     description="Production-oriented fraud detection inference API.",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -49,7 +55,11 @@ def _require_model():
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse(status="ok", model_loaded=model is not None)
+    return HealthResponse(
+        status="ok",
+        model_loaded=model is not None,
+        mongodb_connected=mongo.connected,
+    )
 
 
 @app.get("/model/info", response_model=ModelInfoResponse)
@@ -66,12 +76,11 @@ def model_info() -> ModelInfoResponse:
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: TransactionRequest) -> PredictionResponse:
-    """Score a preprocessed transaction row.
+    """Score a transaction and persist the transaction/prediction when MongoDB is available.
 
-    The payload is intentionally accepted as a dictionary so the API can evolve
-    with the IEEE-CIS feature schema. Full raw-row feature construction will be
-    added in the next serving phase once stateful historical features are backed
-    by MongoDB.
+    Historical feature construction is intentionally not performed here yet.
+    The next serving step will use MongoDB-backed transaction history to build
+    causal velocity/frequency features before inference.
     """
     _require_model()
 
@@ -94,9 +103,37 @@ def predict(request: TransactionRequest) -> PredictionResponse:
         raise HTTPException(status_code=422, detail=f"Prediction failed: {exc}") from exc
 
     threshold = float(cfg.get("ensemble", {}).get("default_threshold", 0.5))
+    prediction = int(probability >= threshold)
+    model_version = "local-checkpoint"
+    persisted = False
+
+    if mongo.connected:
+        try:
+            mongo.save_transaction(request.transaction_id, request.data)
+            mongo.save_prediction(
+                request.transaction_id,
+                probability,
+                prediction,
+                threshold,
+                model_version,
+            )
+            mongo.save_audit(
+                "prediction",
+                {
+                    "transaction_id": request.transaction_id,
+                    "prediction": prediction,
+                    "model_version": model_version,
+                },
+            )
+            persisted = True
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"MongoDB persistence failed: {exc}") from exc
+
     return PredictionResponse(
+        transaction_id=request.transaction_id,
         fraud_probability=probability,
-        prediction=int(probability >= threshold),
+        prediction=prediction,
         threshold=threshold,
-        model_version="local-checkpoint",
+        model_version=model_version,
+        persisted=persisted,
     )
