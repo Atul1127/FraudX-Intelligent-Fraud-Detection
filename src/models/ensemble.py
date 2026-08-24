@@ -17,6 +17,7 @@ class FraudEnsemble:
     def __init__(self, cfg: dict) -> None:
         self.cfg = cfg
         self.feature_names: list[str] | None = None
+        self.category_mappings: dict[str, list] = {}
 
         tuned_path = Path(
             cfg.get("optuna", {}).get(
@@ -99,14 +100,24 @@ class FraudEnsemble:
         joblib.dump(self.lgb_model, checkpoint_dir / "lgb_model.joblib")
         joblib.dump(self.cat_model, checkpoint_dir / "cat_model.joblib")
         joblib.dump(self.feature_names, checkpoint_dir / "feature_names.joblib")
+        joblib.dump(
+            {"category_mappings": self.category_mappings},
+            checkpoint_dir / "feature_metadata.joblib",
+        )
 
     @classmethod
     def load(cls, checkpoint_dir: str | Path, cfg: dict) -> "FraudEnsemble":
-        """Load a trained ensemble without rebuilding model hyperparameters."""
+        """Load a trained ensemble and its preprocessing metadata."""
         checkpoint_dir = Path(checkpoint_dir)
         model = cls.__new__(cls)
         model.cfg = cfg
         model.feature_names = joblib.load(checkpoint_dir / "feature_names.joblib")
+        metadata_path = checkpoint_dir / "feature_metadata.joblib"
+        if metadata_path.exists():
+            metadata = joblib.load(metadata_path)
+            model.category_mappings = metadata.get("category_mappings", {})
+        else:
+            model.category_mappings = {}
         model.xgb_model = joblib.load(checkpoint_dir / "xgb_model.joblib")
         model.lgb_model = joblib.load(checkpoint_dir / "lgb_model.joblib")
         model.cat_model = joblib.load(checkpoint_dir / "cat_model.joblib")
