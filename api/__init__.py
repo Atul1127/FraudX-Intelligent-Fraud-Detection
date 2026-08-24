@@ -1,0 +1,1 @@
+"""FraudX FastAPI application package."""
