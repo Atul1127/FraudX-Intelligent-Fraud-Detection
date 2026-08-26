@@ -1,0 +1,62 @@
+name: Rename Project Title
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  rename-title:
+    if: ${{ !contains(github.event.head_commit.message, '[title-renamed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Replace old project title everywhere
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          old_titles = [
+              "FraudX — Intelligent Fraud Detection Platform",
+              "FraudX - Intelligent Fraud Detection Platform",
+              "FraudX: Intelligent Fraud Detection Platform",
+          ]
+          new_title = "Fraud Detection & Risk Scoring System"
+
+          skip_dirs = {".git", ".venv", "venv", "node_modules"}
+          changed = []
+
+          for path in Path(".").rglob("*"):
+              if not path.is_file() or any(part in skip_dirs for part in path.parts):
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except (UnicodeDecodeError, OSError):
+                  continue
+              updated = text
+              for old in old_titles:
+                  updated = updated.replace(old, new_title)
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+                  changed.append(str(path))
+
+          print("Updated files:", *changed, sep="\n- ")
+          PY
+
+      - name: Commit title changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No title changes needed."
+            exit 0
+          fi
+          git commit -m "Rename project title to Fraud Detection & Risk Scoring System [title-renamed]"
+          git push
