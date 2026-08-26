@@ -17,7 +17,11 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY api ./api
 COPY src ./src
 COPY config.yaml .
-COPY models ./models
+
+# Model checkpoints are generated training artifacts and are intentionally not
+# committed to Git. Create the expected directory so the image can build; the
+# API reports model_loaded=false until a checkpoint is supplied.
+RUN mkdir -p models/checkpoints
 
 EXPOSE 8000
 
